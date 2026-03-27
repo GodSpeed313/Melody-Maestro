@@ -18,3 +18,11 @@ run = "streamlit run main.py --server.port 5000 --server.address 0.0.0.0"
 
 [services.env]
 PORT = "5000"
+
+[services.production]
+
+[services.production.run]
+args = ["streamlit", "run", "main.py", "--server.port", "5000", "--server.address", "0.0.0.0"]
+
+[services.production.run.env]
+PORT = "5000"
