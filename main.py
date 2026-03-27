@@ -63,6 +63,77 @@ st.markdown("""
     }
     .move-body { font-size: 0.9rem; color: #cbd5e1; line-height: 1.6; }
 
+    /* ── Executive Producer Audit styles ── */
+    .audit-header {
+        font-size: 1.05rem; font-weight: 700; color: #f1f5f9;
+        text-transform: uppercase; letter-spacing: 0.12em;
+        margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;
+    }
+
+    .vibe-score-box {
+        background: linear-gradient(135deg, #0f172a, #1e1b4b);
+        border: 1px solid #334155;
+        border-radius: 16px;
+        padding: 1.4rem;
+        text-align: center;
+        margin-bottom: 0.65rem;
+    }
+    .vibe-score-label {
+        font-size: 0.7rem; color: #94a3b8;
+        text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600;
+        margin-bottom: 0.4rem;
+    }
+    .vibe-score-number {
+        font-size: 3.2rem; font-weight: 800; line-height: 1;
+        margin-bottom: 0.3rem;
+    }
+    .vibe-score-number.hot   { color: #34d399; }
+    .vibe-score-number.mid   { color: #fbbf24; }
+    .vibe-score-number.cold  { color: #f87171; }
+    .vibe-score-tag {
+        display: inline-block;
+        font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+        letter-spacing: 0.08em; padding: 0.2rem 0.6rem;
+        border-radius: 999px; margin-bottom: 0.6rem;
+    }
+    .vibe-score-tag.hot  { background: #064e3b; color: #34d399; }
+    .vibe-score-tag.mid  { background: #451a03; color: #fbbf24; }
+    .vibe-score-tag.cold { background: #450a0a; color: #f87171; }
+    .vibe-reason { font-size: 0.85rem; color: #94a3b8; line-height: 1.55; }
+
+    .audit-card {
+        background: #0f172a;
+        border: 1px solid #1e293b;
+        border-radius: 12px;
+        padding: 1.1rem 1.4rem;
+        margin-bottom: 0.65rem;
+    }
+    .audit-card-title {
+        font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+        letter-spacing: 0.1em; margin-bottom: 0.5rem;
+    }
+    .audit-card-title.arrangement { color: #60a5fa; border-left: 3px solid #60a5fa; padding-left: 0.5rem; }
+    .audit-card-title.sonic       { color: #f472b6; border-left: 3px solid #f472b6; padding-left: 0.5rem; }
+    .audit-card-body { font-size: 0.88rem; color: #cbd5e1; line-height: 1.65; }
+
+    .freq-bar-wrap { margin: 0.6rem 0 0.2rem 0; }
+    .freq-bar-label {
+        font-size: 0.72rem; color: #64748b; text-transform: uppercase;
+        letter-spacing: 0.06em; margin-bottom: 0.15rem; display: flex;
+        justify-content: space-between;
+    }
+    .freq-bar-track {
+        height: 6px; border-radius: 4px; background: #1e293b; overflow: hidden;
+        margin-bottom: 0.35rem;
+    }
+    .freq-bar-fill {
+        height: 100%; border-radius: 4px;
+        transition: width 0.5s ease;
+    }
+    .freq-bar-fill.low  { background: #f472b6; }
+    .freq-bar-fill.mid  { background: #a78bfa; }
+    .freq-bar-fill.high { background: #38bdf8; }
+
     .divider {
         height: 1px;
         background: linear-gradient(90deg, transparent, #334155, transparent);
@@ -85,7 +156,6 @@ st.markdown("""
         text-align: center; color: #475569; font-size: 0.72rem; margin-top: 1.5rem;
     }
 
-    /* Style the Streamlit chat bubbles to match the dark theme */
     [data-testid="stChatMessage"] {
         background: #0f172a !important;
         border: 1px solid #1e293b !important;
@@ -100,7 +170,7 @@ st.markdown("""
 if "chat_messages" not in st.session_state:
     st.session_state.chat_messages = []
 if "analysis" not in st.session_state:
-    st.session_state.analysis = None   # {bpm, key, advice, filename}
+    st.session_state.analysis = None
 
 
 # ── OpenAI client ───────────────────────────────────────────────────────────────
@@ -123,15 +193,16 @@ def analyze_audio(file_bytes: bytes, filename: str):
     y, sr = librosa.load(tmp_path, sr=None, mono=True)
     os.unlink(tmp_path)
 
+    # BPM
     tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
     bpm = round(float(np.atleast_1d(tempo)[0]), 1)
 
+    # Key detection via chroma
     chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
     chroma_mean = chroma.mean(axis=1)
     note_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
     root_idx = int(np.argmax(chroma_mean))
     root = note_names[root_idx]
-
     major_template = np.array([1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1], dtype=float)
     minor_template = np.array([1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0], dtype=float)
     shifted_chroma = np.roll(chroma_mean, -root_idx)
@@ -139,8 +210,35 @@ def analyze_audio(file_bytes: bytes, filename: str):
     major_score = np.dot(shifted_chroma, major_template / major_template.sum())
     minor_score = np.dot(shifted_chroma, minor_template / minor_template.sum())
     mode = "Major" if major_score >= minor_score else "Minor"
+    key = f"{root} {mode}"
 
-    return bpm, f"{root} {mode}"
+    # Frequency band energies via STFT
+    S = np.abs(librosa.stft(y))
+    freqs = librosa.fft_frequencies(sr=sr)
+    low_mask  = freqs <= 200
+    mid_mask  = (freqs > 200) & (freqs <= 4000)
+    high_mask = freqs > 4000
+    low_e  = float(S[low_mask].sum())
+    mid_e  = float(S[mid_mask].sum())
+    high_e = float(S[high_mask].sum())
+    total_e = low_e + mid_e + high_e + 1e-9
+    low_pct  = round(low_e  / total_e * 100, 1)
+    mid_pct  = round(mid_e  / total_e * 100, 1)
+    high_pct = round(high_e / total_e * 100, 1)
+
+    # Track duration in seconds
+    duration = round(float(len(y) / sr), 1)
+
+    # Spectral centroid (brightness)
+    centroid_mean = round(float(librosa.feature.spectral_centroid(y=y, sr=sr).mean()), 0)
+
+    return bpm, key, {
+        "low_pct": low_pct,
+        "mid_pct": mid_pct,
+        "high_pct": high_pct,
+        "duration": duration,
+        "centroid_hz": centroid_mean,
+    }
 
 
 # ── Three-Move advice ───────────────────────────────────────────────────────────
@@ -202,17 +300,143 @@ def parse_moves(advice_text: str):
     return moves
 
 
+# ── Executive Producer Audit ────────────────────────────────────────────────────
+def get_beat_grade(bpm: float, key: str, metrics: dict, client: OpenAI):
+    duration = metrics["duration"]
+    low_pct  = metrics["low_pct"]
+    mid_pct  = metrics["mid_pct"]
+    high_pct = metrics["high_pct"]
+    centroid = metrics["centroid_hz"]
+
+    # Infer likely genre from BPM for richer context
+    if bpm < 80:
+        genre_hint = "lo-fi / downtempo"
+    elif bpm < 100:
+        genre_hint = "hip-hop / trap"
+    elif bpm < 120:
+        genre_hint = "R&B / neo-soul"
+    elif bpm < 135:
+        genre_hint = "house / pop"
+    elif bpm < 150:
+        genre_hint = "techno / drum and bass"
+    else:
+        genre_hint = "drum and bass / jungle"
+
+    system_prompt = (
+        "You are an Executive Producer reviewing a track from a session in FL Studio. "
+        "You write like a world-class A&R — direct, specific, no filler. "
+        "Always use FL Studio terminology. "
+        "Reference specific tools like: Piano Roll velocity lanes, "
+        "the Fruity Parametric EQ 2 high-shelf, Fruity Limiter ceiling, "
+        "Mixer send tracks, the Pattern Block view in the Playlist, "
+        "Patcher, Fruity Multiband Compressor, Maximus side-chain, "
+        "Fruity Peak Controller, the Step Sequencer velocity buttons, etc. "
+        "Your critique must be tied to the actual numbers given. "
+        "Never give generic advice."
+    )
+
+    user_prompt = (
+        f"Track data:\n"
+        f"  BPM: {bpm} | Key: {key} | Duration: {duration}s\n"
+        f"  Likely genre: {genre_hint}\n"
+        f"  Frequency energy split — Low (kick/bass, ≤200Hz): {low_pct}% | "
+        f"Mid (body, 200Hz–4kHz): {mid_pct}% | High (snares/hats, >4kHz): {high_pct}%\n"
+        f"  Spectral centroid: {centroid:.0f} Hz\n\n"
+        "Give an Executive Producer Audit with EXACTLY this structure and these labels:\n\n"
+        "VIBE SCORE: <single integer 1-10>\n"
+        "VIBE REASON: <1–2 sentences explaining the score — tie it to genre fit, key, BPM feel, "
+        "and whether the energy balance suits the style>\n\n"
+        "ARRANGEMENT CRITIQUE:\n"
+        "<2–3 sentences. Comment on whether the track duration suggests an intro that's too long "
+        f"(typical {genre_hint} track has an 8–16 bar intro at {bpm} BPM, "
+        f"that's about {round(8 * (60/bpm) * 4, 1)}–{round(16 * (60/bpm) * 4, 1)} seconds). "
+        "Comment on the transition to the hook — does it need more impact? "
+        "Give a concrete FL Studio fix using Playlist or Piano Roll terminology.>\n\n"
+        "SONIC BALANCE — KICK/BASS:\n"
+        "<2 sentences. Based on the low-end percentage, tell me if the kick and bass are clashing "
+        "or sitting well. Give a concrete fix using Fruity Parametric EQ 2 or Fruity Multiband Compressor.>\n\n"
+        "SONIC BALANCE — HIGH END:\n"
+        "<2 sentences. Based on the high-frequency percentage and spectral centroid, tell me if "
+        "the snares/hats are too loud, too dull, or balanced. "
+        "Give a concrete fix using FL Studio tools.>"
+    )
+
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        max_tokens=700,
+        temperature=0.8,
+    )
+    return response.choices[0].message.content.strip()
+
+
+def parse_beat_grade(raw: str):
+    result = {
+        "vibe_score": None,
+        "vibe_reason": "",
+        "arrangement": "",
+        "sonic_kick": "",
+        "sonic_high": "",
+    }
+    lines = raw.splitlines()
+    current = None
+    buffer = []
+
+    def flush(key):
+        if key and buffer:
+            result[key] = " ".join(" ".join(buffer).split())
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("VIBE SCORE:"):
+            flush(current); buffer = []
+            try:
+                result["vibe_score"] = int("".join(filter(str.isdigit, stripped.split(":", 1)[1])))
+            except Exception:
+                result["vibe_score"] = 7
+            current = None
+        elif stripped.startswith("VIBE REASON:"):
+            flush(current); current = "vibe_reason"
+            rest = stripped.split(":", 1)[1].strip()
+            buffer = [rest] if rest else []
+        elif stripped.startswith("ARRANGEMENT CRITIQUE:"):
+            flush(current); current = "arrangement"
+            rest = stripped.split(":", 1)[1].strip()
+            buffer = [rest] if rest else []
+        elif stripped.startswith("SONIC BALANCE — KICK/BASS:"):
+            flush(current); current = "sonic_kick"
+            rest = stripped.split(":", 1)[1].strip()
+            buffer = [rest] if rest else []
+        elif stripped.startswith("SONIC BALANCE — HIGH END:"):
+            flush(current); current = "sonic_high"
+            rest = stripped.split(":", 1)[1].strip()
+            buffer = [rest] if rest else []
+        elif stripped and current:
+            buffer.append(stripped)
+
+    flush(current)
+    if result["vibe_score"] is None:
+        result["vibe_score"] = 7
+    return result
+
+
 # ── Chat function ───────────────────────────────────────────────────────────────
 def chat_with_architect(user_message: str, client: OpenAI):
-    """Send a message to GPT-4o with track context and return the reply."""
     analysis = st.session_state.analysis
     if analysis:
+        beat_grade_ctx = ""
+        if analysis.get("beat_grade_raw"):
+            beat_grade_ctx = f"\nThe Executive Producer Audit was:\n{analysis['beat_grade_raw']}\n"
         context = (
             f"The user has analyzed a track with these results:\n"
             f"  - BPM: {analysis['bpm']}\n"
             f"  - Key: {analysis['key']}\n"
             f"  - File: {analysis['filename']}\n\n"
-            f"The Three-Move advice given was:\n{analysis['advice']}\n\n"
+            f"The Three-Move advice given was:\n{analysis['advice']}\n"
+            f"{beat_grade_ctx}\n"
             "Use this as context when answering follow-up questions about this track."
         )
     else:
@@ -258,12 +482,10 @@ with st.sidebar:
             unsafe_allow_html=True,
         )
 
-    # Render existing chat history
     for msg in st.session_state.chat_messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    # Chat input
     user_input = st.chat_input("Ask about your track or anything FL Studio…")
     if user_input:
         st.session_state.chat_messages.append({"role": "user", "content": user_input})
@@ -287,6 +509,25 @@ with st.sidebar:
             st.rerun()
 
 
+# ── Helpers ─────────────────────────────────────────────────────────────────────
+def score_tier(score):
+    if score >= 8:
+        return "hot", "HEAT"
+    elif score >= 6:
+        return "mid", "SOLID"
+    else:
+        return "cold", "NEEDS WORK"
+
+
+def freq_bar_html(label, pct, css_class):
+    return (
+        f'<div class="freq-bar-label"><span>{label}</span><span>{pct}%</span></div>'
+        f'<div class="freq-bar-track">'
+        f'<div class="freq-bar-fill {css_class}" style="width:{min(pct, 100)}%"></div>'
+        f'</div>'
+    )
+
+
 # ── Main panel ──────────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="main-header">
@@ -302,21 +543,20 @@ uploaded = st.file_uploader(
 )
 
 if uploaded is not None:
-    # Only re-analyze if the file changed
     cached = st.session_state.analysis
     if cached is None or cached.get("filename") != uploaded.name:
         st.audio(uploaded)
         st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 
-        with st.spinner("Analyzing audio..."):
+        with st.spinner("Analyzing audio…"):
             try:
                 file_bytes = uploaded.read()
-                bpm, key = analyze_audio(file_bytes, uploaded.name)
+                bpm, key, metrics = analyze_audio(file_bytes, uploaded.name)
             except Exception as e:
                 st.error(f"Audio analysis failed: {e}")
                 st.stop()
 
-        with st.spinner("The Architect is thinking..."):
+        with st.spinner("The Architect is writing your Three Moves…"):
             try:
                 client = get_openai_client()
                 advice = get_advice(bpm, key, client)
@@ -324,24 +564,34 @@ if uploaded is not None:
                 st.error(f"Could not reach AI: {e}")
                 st.stop()
 
+        with st.spinner("Running Executive Producer Audit…"):
+            try:
+                beat_grade_raw = get_beat_grade(bpm, key, metrics, client)
+            except Exception as e:
+                beat_grade_raw = ""
+
         st.session_state.analysis = {
             "filename": uploaded.name,
             "bpm": bpm,
             "key": key,
+            "metrics": metrics,
             "advice": advice,
+            "beat_grade_raw": beat_grade_raw,
         }
         st.rerun()
 
     else:
-        # Render from cached analysis
         analysis = st.session_state.analysis
-        bpm = analysis["bpm"]
-        key = analysis["key"]
-        advice = analysis["advice"]
+        bpm     = analysis["bpm"]
+        key     = analysis["key"]
+        advice  = analysis["advice"]
+        metrics = analysis.get("metrics", {})
+        beat_grade_raw = analysis.get("beat_grade_raw", "")
 
         st.audio(uploaded)
         st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 
+        # ── BPM / Key stat boxes ────────────────────────────────────────────────
         col1, col2 = st.columns(2)
         with col1:
             st.markdown(f"""
@@ -359,6 +609,8 @@ if uploaded is not None:
             """, unsafe_allow_html=True)
 
         st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+
+        # ── Three-Move advice ───────────────────────────────────────────────────
         st.markdown("#### 🎯 Three-Move Production Advice")
 
         moves = parse_moves(advice)
@@ -383,11 +635,80 @@ if uploaded is not None:
             """, unsafe_allow_html=True)
 
         st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-        with st.expander("Raw GPT response"):
-            st.text(advice)
+
+        # ── Executive Producer Audit ────────────────────────────────────────────
+        st.markdown("#### 🎤 Executive Producer Audit")
+
+        if beat_grade_raw:
+            grade = parse_beat_grade(beat_grade_raw)
+            score = grade["vibe_score"] or 7
+            tier, tag_label = score_tier(score)
+
+            left_col, right_col = st.columns([1, 2])
+
+            with left_col:
+                # Vibe Score
+                st.markdown(f"""
+                <div class="vibe-score-box">
+                    <div class="vibe-score-label">Vibe Score</div>
+                    <div class="vibe-score-number {tier}">{score}<span style="font-size:1.4rem;font-weight:400;color:#475569">/10</span></div>
+                    <div><span class="vibe-score-tag {tier}">{tag_label}</span></div>
+                    <div class="vibe-reason">{grade["vibe_reason"]}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                # Frequency balance bars
+                if metrics:
+                    bars_html = (
+                        '<div class="audit-card" style="margin-top:0;">'
+                        '<div class="audit-card-title sonic">Frequency Balance</div>'
+                        '<div class="freq-bar-wrap">'
+                        + freq_bar_html("Low (Kick/Bass ≤200Hz)", metrics["low_pct"], "low")
+                        + freq_bar_html("Mid (Body 200Hz–4kHz)", metrics["mid_pct"], "mid")
+                        + freq_bar_html("High (Snares/Hats >4kHz)", metrics["high_pct"], "high")
+                        + f'<div style="font-size:0.7rem;color:#475569;margin-top:0.4rem;">Centroid: {metrics["centroid_hz"]:.0f} Hz · Duration: {metrics["duration"]}s</div>'
+                        + '</div></div>'
+                    )
+                    st.markdown(bars_html, unsafe_allow_html=True)
+
+            with right_col:
+                # Arrangement Critique
+                if grade["arrangement"]:
+                    st.markdown(f"""
+                    <div class="audit-card">
+                        <div class="audit-card-title arrangement">📐 Arrangement Critique</div>
+                        <div class="audit-card-body">{grade["arrangement"]}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                # Sonic Balance — Kick/Bass
+                if grade["sonic_kick"]:
+                    st.markdown(f"""
+                    <div class="audit-card">
+                        <div class="audit-card-title sonic">🔊 Sonic Balance — Kick &amp; Bass</div>
+                        <div class="audit-card-body">{grade["sonic_kick"]}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                # Sonic Balance — High End
+                if grade["sonic_high"]:
+                    st.markdown(f"""
+                    <div class="audit-card">
+                        <div class="audit-card-title sonic">✨ Sonic Balance — High End</div>
+                        <div class="audit-card-body">{grade["sonic_high"]}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+        else:
+            st.info("Executive Producer Audit could not be generated for this track.")
+
+        st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+        with st.expander("Raw GPT responses"):
+            st.text("── Three-Move Advice ──\n" + advice)
+            if beat_grade_raw:
+                st.text("\n── Executive Producer Audit ──\n" + beat_grade_raw)
 
 else:
-    # Clear cached analysis if file is removed
     if st.session_state.analysis is not None:
         st.session_state.analysis = None
 
@@ -403,6 +724,6 @@ else:
 
 st.markdown("""
 <div class="footer-note">
-    The Architect · Powered by librosa + GPT-4o · Three-Move Rule
+    The Architect · Powered by librosa + GPT-4o · Three-Move Rule · Executive Producer Audit
 </div>
 """, unsafe_allow_html=True)
