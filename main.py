@@ -131,7 +131,7 @@ def analyze_audio(file_bytes: bytes, filename: str):
 
     # BPM
     tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
-    bpm = float(np.round(tempo, 1))
+    bpm = round(float(np.atleast_1d(tempo)[0]), 1)
 
     # Key — chroma-based
     chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
