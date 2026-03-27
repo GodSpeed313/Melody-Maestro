@@ -156,20 +156,33 @@ def analyze_audio(file_bytes: bytes, filename: str):
 def get_advice(bpm: float, key: str, client: OpenAI):
     """Call GPT-4o with the Three-Move Rule prompt and return structured advice."""
     system_prompt = (
-        "You are The Architect — an elite music producer and sound designer who gives "
-        "precise, actionable advice. You follow the Three-Move Rule: every response "
-        "must cover exactly three areas in order — Drums, Texture, and Mix — and each "
-        "section must be specific, practical, and tailored to the supplied BPM and key. "
-        "No filler. No generic tips. Sound like a world-class producer talking to a peer."
+        "You are The Architect — an elite FL Studio producer and sound designer. "
+        "You give precise, actionable advice using the Three-Move Rule: every response "
+        "covers exactly three areas in order — Drums, Texture, and Mix. "
+        "Each move must be tailored to the specific BPM and key provided, and must end "
+        "with either a concrete FL Studio keyboard shortcut (labeled 'Shortcut:') OR a "
+        "specific FL Studio stock plugin name and how to use it (labeled 'Plugin:'). "
+        "Reference real FL Studio stock plugins like Fruity Peak Controller, Fruity Granulizer, "
+        "Fruity Parametric EQ 2, Maximus, Fruity Stereo Enhancer, Fruity Fast Dist, "
+        "Fruity Reeverb 2, Fruity Delay 3, Fruity Blood Overdrive, Fruity Flanger, "
+        "Fruity Multiband Compressor, Fruity Limiter, Harmor, Sytrus, FLEX, etc. "
+        "Reference real FL Studio shortcuts like Alt+U, Ctrl+Q, Shift+drag, etc. "
+        "No filler. No generic tips. One shortcut or plugin per move. "
+        "Sound like a world-class producer giving a peer a session breakdown."
     )
 
     user_prompt = (
         f"Analyze this track: BPM = {bpm}, Key = {key}.\n\n"
-        "Apply the Three-Move Rule and give me production advice.\n\n"
-        "Format your response EXACTLY like this (use the exact section labels):\n\n"
-        "MOVE 1 — DRUMS:\n<your drums advice>\n\n"
-        "MOVE 2 — TEXTURE:\n<your texture advice>\n\n"
-        "MOVE 3 — MIX:\n<your mix advice>"
+        "Apply the Three-Move Rule. For each move, give specific advice tied to the BPM "
+        "and key, then end with a concrete FL Studio shortcut or stock plugin tip.\n\n"
+        "Format your response EXACTLY like this example structure "
+        "(use the exact section labels, and end each move with either 'Shortcut:' or 'Plugin:'):\n\n"
+        "MOVE 1 — DRUMS:\n"
+        "<specific drum advice for the BPM/key>. Shortcut: <real FL Studio shortcut and what it does>\n\n"
+        "MOVE 2 — TEXTURE:\n"
+        "<specific texture advice for the BPM/key>. Plugin: <FL Studio stock plugin name> — <how to use it>\n\n"
+        "MOVE 3 — MIX:\n"
+        "<specific mix advice for the BPM/key>. Plugin: <FL Studio stock plugin name> — <how to use it>"
     )
 
     response = client.chat.completions.create(
