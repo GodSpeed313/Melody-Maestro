@@ -4,6 +4,19 @@
 
 pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
 
+## The Architect (Python Streamlit App)
+
+A standalone music production advisor at the project root.
+
+- **Entry**: `main.py` — Streamlit app
+- **Port**: 5000 (address: 0.0.0.0)
+- **Run**: `streamlit run main.py --server.port 5000 --server.address 0.0.0.0`
+- **Features**:
+  - Upload MP3/WAV → librosa analyzes BPM and musical key
+  - GPT-4o (via Replit AI Integrations) gives production advice using the Three-Move Rule (Drums, Texture, Mix)
+- **AI**: Uses `AI_INTEGRATIONS_OPENAI_BASE_URL` + `AI_INTEGRATIONS_OPENAI_API_KEY` (auto-provisioned)
+- **Python packages**: streamlit, librosa, openai, soundfile, numpy (managed by uv in `.pythonlibs`)
+
 ## Stack
 
 - **Monorepo tool**: pnpm workspaces
