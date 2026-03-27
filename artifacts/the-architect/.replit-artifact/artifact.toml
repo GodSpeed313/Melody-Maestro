@@ -1,0 +1,20 @@
+kind = "web"
+previewPath = "/"
+title = "The Architect"
+version = "1.0.0"
+id = "artifacts/the-architect"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = ["/"]
+localPort = 5000
+
+[services.development]
+run = "streamlit run main.py --server.port 5000 --server.address 0.0.0.0"
+
+[services.env]
+PORT = "5000"
