@@ -4,3 +4,4 @@ openai==2.30.0
 soundfile==0.13.1
 numpy==2.4.3
 audioread==3.1.0
+pretty-midi==0.2.11
