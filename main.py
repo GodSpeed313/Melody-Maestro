@@ -1,6 +1,8 @@
 import os
 import tempfile
+import datetime
 import streamlit as st
+import streamlit.components.v1 as components
 import librosa
 import numpy as np
 import pretty_midi
@@ -323,6 +325,15 @@ def analyze_midi(file_bytes: bytes):
 # ── Three-Move advice ───────────────────────────────────────────────────────────
 def get_advice(bpm: float, key: str, client: OpenAI, genre: str = "Rap"):
     system_prompt = (
+        f"CRITICAL INSTRUCTION — READ FIRST: The producer is working in {genre}. "
+        f"Every single recommendation must use {genre}-specific language, references, and techniques. "
+        f"Do NOT reference dance music, house, club tracks, EDM, or pop crossover unless the genre is literally 'Pop'. "
+        f"Do NOT infer genre from BPM. BPM alone never determines genre. "
+        f"If genre is 'Old School R&B / Hip-Hop': reference soul samples, boom bap grooves, warm Rhodes, "
+        f"MPC-style chops, vinyl crackle texture, dusty drum breaks, and classic hip-hop energy. "
+        f"If genre is 'Rap' or 'Hip-Hop': reference 808s, trap hi-hat rolls, hard-hitting kicks, and street energy. "
+        f"If genre is 'R&B': reference smooth chord voicings, layered harmonies, and lush pads. "
+        f"If genre is 'Alternative Rock': reference distorted guitars, live drum feel, and raw mix energy. "
         "You are The Architect — an elite FL Studio producer and sound designer. "
         "You give precise, actionable advice using the Three-Move Rule: every response "
         "covers exactly three areas in order — Drums, Texture, and Mix. "
@@ -335,8 +346,7 @@ def get_advice(bpm: float, key: str, client: OpenAI, genre: str = "Rap"):
         "Fruity Multiband Compressor, Fruity Limiter, Harmor, Sytrus, FLEX, etc. "
         "Reference real FL Studio shortcuts like Alt+U, Ctrl+Q, Shift+drag, etc. "
         "No filler. No generic tips. One shortcut or plugin per move. "
-        "Sound like a world-class producer giving a peer a session breakdown. "
-        f"The producer is working in the {genre} genre — tailor every recommendation to the conventions, energy, and FL Studio workflow of that style."
+        "Sound like a world-class producer giving a peer a session breakdown."
     )
     user_prompt = (
         f"Genre: {genre}\n"
@@ -354,6 +364,7 @@ def get_advice(bpm: float, key: str, client: OpenAI, genre: str = "Rap"):
     )
     response = client.chat.completions.create(
         model="gpt-4o",
+        timeout=25,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -389,9 +400,16 @@ def get_beat_grade(bpm: float, key: str, metrics: dict, client: OpenAI, genre: s
     high_pct = metrics["high_pct"]
     centroid = metrics["centroid_hz"]
 
-    genre_hint = genre
-
     system_prompt = (
+        f"CRITICAL INSTRUCTION — READ FIRST: The producer is working in {genre}. "
+        f"Every critique — Vibe Reason, Arrangement, Sonic Balance — must use {genre}-specific language and references. "
+        f"Do NOT say 'house', 'club', 'dance floor', 'EDM', or 'pop crossover' unless the genre is literally 'Pop'. "
+        f"Do NOT infer genre from BPM. BPM alone never determines genre. "
+        f"If genre is 'Old School R&B / Hip-Hop': the Vibe Reason MUST reference boom bap feel, "
+        f"soul warmth, sample-based texture, or classic hip-hop energy — NEVER dance music. "
+        f"If genre is 'Rap' or 'Hip-Hop': reference trap energy, 808 weight, or street feel. "
+        f"If genre is 'R&B': reference smoothness, vocal presence, and emotional chord movement. "
+        f"If genre is 'Alternative Rock': reference raw energy, guitar presence, and live feel. "
         "You are an Executive Producer reviewing a track from a session in FL Studio. "
         "You write like a world-class A&R — direct, specific, no filler. "
         "Always use FL Studio terminology. "
@@ -406,8 +424,8 @@ def get_beat_grade(bpm: float, key: str, metrics: dict, client: OpenAI, genre: s
 
     user_prompt = (
         f"Track data:\n"
+        f"  Genre: {genre}\n"
         f"  BPM: {bpm} | Key: {key} | Duration: {duration}s\n"
-        f"  Likely genre: {genre_hint}\n"
         f"  Frequency energy split — Low (kick/bass, ≤200Hz): {low_pct}% | "
         f"Mid (body, 200Hz–4kHz): {mid_pct}% | High (snares/hats, >4kHz): {high_pct}%\n"
         f"  Spectral centroid: {centroid:.0f} Hz\n\n"
@@ -417,7 +435,7 @@ def get_beat_grade(bpm: float, key: str, metrics: dict, client: OpenAI, genre: s
         "and whether the energy balance suits the style>\n\n"
         "ARRANGEMENT CRITIQUE:\n"
         "<2–3 sentences. Comment on whether the track duration suggests an intro that's too long "
-        f"(typical {genre_hint} track has an 8–16 bar intro at {bpm} BPM, "
+        f"(typical {genre} track has an 8–16 bar intro at {bpm} BPM, "
         f"that's about {round(8 * (60/bpm) * 4, 1)}–{round(16 * (60/bpm) * 4, 1)} seconds). "
         "Comment on the transition to the hook — does it need more impact? "
         "Give a concrete FL Studio fix using Playlist or Piano Roll terminology.>\n\n"
@@ -432,6 +450,7 @@ def get_beat_grade(bpm: float, key: str, metrics: dict, client: OpenAI, genre: s
 
     response = client.chat.completions.create(
         model="gpt-4o",
+        timeout=25,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -544,6 +563,7 @@ def get_midi_advice(midi_data: dict, client: OpenAI, genre: str = "Rap"):
     )
     response = client.chat.completions.create(
         model="gpt-4o",
+        timeout=25,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -587,6 +607,7 @@ def chat_with_architect(user_message: str, client: OpenAI):
 
     response = client.chat.completions.create(
         model="gpt-4o",
+        timeout=25,
         messages=messages,
         max_tokens=600,
         temperature=0.8,
@@ -613,13 +634,44 @@ def freq_bar_html(label, pct, css_class):
     )
 
 
+def _save_buttons(text: str, filename: str, key_prefix: str = "") -> None:
+    col_dl, col_cp, _ = st.columns([1, 1, 6])
+    with col_dl:
+        st.download_button(
+            label="⬇️ Download",
+            data=text,
+            file_name=filename,
+            mime="text/plain",
+            key=f"{key_prefix}_download",
+        )
+    with col_cp:
+        safe = text.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
+        btn_id = f"cp-btn-{key_prefix}"
+        components.html(
+            f"""
+            <button id="{btn_id}"
+              onclick="navigator.clipboard.writeText(`{safe}`).then(function(){{
+                var b=document.getElementById('{btn_id}');
+                b.innerText='✅ Copied!';
+                setTimeout(function(){{b.innerText='📋 Copy';}},2000);
+              }});"
+              style="background:#1e293b;color:#94a3b8;border:1px solid #334155;
+                     border-radius:6px;padding:5px 14px;font-size:0.82rem;
+                     cursor:pointer;font-family:sans-serif;margin-top:2px;">
+              📋 Copy
+            </button>
+            """,
+            height=42,
+        )
+
+
 # ── Sidebar chat ────────────────────────────────────────────────────────────────
 with st.sidebar:
     selected_genre = st.selectbox(
-        "Genre",
-        options=["Rap", "Hip-Hop", "R&B", "Old School R&B / Hip-Hop", "Pop", "Alternative Rock"],
+        "🎵 Genre",
+        ["Rap", "Hip-Hop", "R&B", "Old School R&B / Hip-Hop", "Pop", "Alternative Rock"],
         index=0,
-        key="genre",
+        key="genre"
     )
 
     st.markdown('<div class="sidebar-header">💬 Ask The Architect</div>', unsafe_allow_html=True)
@@ -688,11 +740,11 @@ with tab1:
     )
 
     if uploaded is not None:
-        cached = st.session_state.analysis
-        if cached is None or cached.get("filename") != uploaded.name:
-            st.audio(uploaded)
-            st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+        if st.button("🔄 Re-analyze", key="reanalyze_audio", help="Clear cached results and run fresh AI analysis"):
+            st.session_state.analysis = None
 
+        cached = st.session_state.analysis
+        if cached is None or cached.get("filename") != uploaded.name or cached.get("genre") != selected_genre:
             with st.spinner("Analyzing audio…"):
                 try:
                     file_bytes = uploaded.read()
@@ -701,152 +753,208 @@ with tab1:
                     st.error(f"Audio analysis failed: {e}")
                     st.stop()
 
+            client = get_openai_client()
             with st.spinner("The Architect is writing your Three Moves…"):
                 try:
-                    client = get_openai_client()
                     advice = get_advice(bpm, key, client, genre=selected_genre)
-                except Exception as e:
-                    st.error(f"Could not reach AI: {e}")
+                except Exception:
+                    st.session_state.analysis = {
+                        "filename": uploaded.name,
+                        "genre": selected_genre,
+                        "bpm": bpm, "key": key, "metrics": metrics,
+                        "advice": None, "beat_grade_raw": "", "ai_error": True,
+                        "analyzed_at": datetime.datetime.now(),
+                    }
+                    st.warning("⚠️ The AI service is temporarily unavailable. Click **Re-analyze** to try again.")
                     st.stop()
 
             with st.spinner("Running Executive Producer Audit…"):
                 try:
                     beat_grade_raw = get_beat_grade(bpm, key, metrics, client, genre=selected_genre)
-                except Exception as e:
+                except Exception:
                     beat_grade_raw = ""
 
             st.session_state.analysis = {
                 "filename": uploaded.name,
+                "genre": selected_genre,
                 "bpm": bpm,
                 "key": key,
                 "metrics": metrics,
                 "advice": advice,
                 "beat_grade_raw": beat_grade_raw,
+                "analyzed_at": datetime.datetime.now(),
             }
-            st.rerun()
 
-        else:
-            analysis = st.session_state.analysis
-            bpm     = analysis["bpm"]
-            key     = analysis["key"]
-            advice  = analysis["advice"]
-            metrics = analysis.get("metrics", {})
-            beat_grade_raw = analysis.get("beat_grade_raw", "")
+        analysis = st.session_state.analysis
+        bpm     = analysis["bpm"]
+        key     = analysis["key"]
+        advice  = analysis.get("advice") or ""
+        metrics = analysis.get("metrics", {})
+        beat_grade_raw = analysis.get("beat_grade_raw", "")
+        ai_error = analysis.get("ai_error", False)
 
-            st.audio(uploaded)
-            st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+        st.audio(uploaded)
+        st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 
-            # ── BPM / Key stat boxes ────────────────────────────────────────────────
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown(f"""
-                <div class="stat-box">
-                    <div class="stat-label">BPM</div>
-                    <div class="stat-value">{bpm}</div>
-                </div>
-                """, unsafe_allow_html=True)
-            with col2:
-                st.markdown(f"""
-                <div class="stat-box">
-                    <div class="stat-label">Key</div>
-                    <div class="stat-value">{key}</div>
-                </div>
-                """, unsafe_allow_html=True)
+        # ── Genre indicator ─────────────────────────────────────────────────────
+        _genre_label = analysis.get("genre", "")
+        if _genre_label:
+            st.markdown(
+                f'<div style="margin-bottom:0.75rem;">'
+                f'<span style="font-size:0.72rem;font-weight:500;'
+                f'background:#1e293b;color:#94a3b8;border:1px solid #334155;'
+                f'border-radius:999px;padding:0.15rem 0.6rem;'
+                f'letter-spacing:0.04em;text-transform:uppercase;">Genre: {_genre_label}</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
-            st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+        # ── BPM / Key stat boxes ────────────────────────────────────────────────
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown(f"""
+            <div class="stat-box">
+                <div class="stat-label">BPM</div>
+                <div class="stat-value">{bpm}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col2:
+            st.markdown(f"""
+            <div class="stat-box">
+                <div class="stat-label">Key</div>
+                <div class="stat-value">{key}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-            # ── Three-Move advice ───────────────────────────────────────────────────
-            st.markdown("#### 🎯 Three-Move Production Advice")
+        st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 
-            moves = parse_moves(advice)
-            icons = {"Drums": "🥁", "Texture": "🌊", "Mix": "🎛️"}
-            labels = ["Drums", "Texture", "Mix"]
+        if ai_error:
+            st.warning("⚠️ The AI service is temporarily unavailable. Click **Re-analyze** to try again.")
+            st.stop()
 
-            if moves:
-                for i, label in enumerate(labels, 1):
-                    content = moves.get(label, "")
-                    if content:
-                        st.markdown(f"""
-                        <div class="move-card">
-                            <div class="move-title">Move {i} — {icons.get(label, "")} {label}</div>
-                            <div class="move-body">{content}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-            else:
-                st.markdown(f"""
-                <div class="move-card">
-                    <div class="move-body">{advice}</div>
-                </div>
-                """, unsafe_allow_html=True)
+        # ── Three-Move advice ───────────────────────────────────────────────────
+        advice_genre = analysis.get("genre", "")
+        analyzed_at = analysis.get("analyzed_at")
+        analyzed_at_str = analyzed_at.strftime("%-I:%M %p") if analyzed_at else ""
+        st.markdown(
+            f'#### 🎯 Three-Move Production Advice'
+            f'<span style="margin-left:0.6rem;font-size:0.72rem;font-weight:500;'
+            f'background:#1e293b;color:#94a3b8;border:1px solid #334155;'
+            f'border-radius:999px;padding:0.15rem 0.55rem;vertical-align:middle;'
+            f'letter-spacing:0.02em;">Genre: {advice_genre}</span>'
+            + (f'<span style="margin-left:0.5rem;font-size:0.72rem;color:#64748b;vertical-align:middle;">'
+               f'Last analyzed at {analyzed_at_str}</span>' if analyzed_at_str else ""),
+            unsafe_allow_html=True,
+        )
 
-            st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+        moves = parse_moves(advice)
+        icons = {"Drums": "🥁", "Texture": "🌊", "Mix": "🎛️"}
+        labels = ["Drums", "Texture", "Mix"]
 
-            # ── Executive Producer Audit ────────────────────────────────────────────
-            st.markdown("#### 🎤 Executive Producer Audit")
-
-            if beat_grade_raw:
-                grade = parse_beat_grade(beat_grade_raw)
-                score = grade["vibe_score"] or 7
-                tier, tag_label = score_tier(score)
-
-                left_col, right_col = st.columns([1, 2])
-
-                with left_col:
+        if moves:
+            for i, label in enumerate(labels, 1):
+                content = moves.get(label, "")
+                if content:
                     st.markdown(f"""
-                    <div class="vibe-score-box">
-                        <div class="vibe-score-label">Vibe Score</div>
-                        <div class="vibe-score-number {tier}">{score}<span style="font-size:1.4rem;font-weight:400;color:#475569">/10</span></div>
-                        <div><span class="vibe-score-tag {tier}">{tag_label}</span></div>
-                        <div class="vibe-reason">{grade["vibe_reason"]}</div>
+                    <div class="move-card">
+                        <div class="move-title">Move {i} — {icons.get(label, "")} {label}</div>
+                        <div class="move-body">{content}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div class="move-card">
+                <div class="move-body">{advice}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        _save_buttons(
+            f"Three-Move Production Advice\nGenre: {advice_genre}\n\n{advice}",
+            "three_move_advice.txt",
+            "tab1_moves",
+        )
+
+        st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+
+        # ── Executive Producer Audit ────────────────────────────────────────────
+        st.markdown(
+            f'#### 🎤 Executive Producer Audit'
+            f'<span style="margin-left:0.6rem;font-size:0.72rem;font-weight:500;'
+            f'background:#1e293b;color:#94a3b8;border:1px solid #334155;'
+            f'border-radius:999px;padding:0.15rem 0.55rem;vertical-align:middle;'
+            f'letter-spacing:0.02em;">Genre: {advice_genre}</span>',
+            unsafe_allow_html=True,
+        )
+
+        if beat_grade_raw:
+            grade = parse_beat_grade(beat_grade_raw)
+            score = grade["vibe_score"] or 7
+            tier, tag_label = score_tier(score)
+
+            left_col, right_col = st.columns([1, 2])
+
+            with left_col:
+                st.markdown(f"""
+                <div class="vibe-score-box">
+                    <div class="vibe-score-label">Vibe Score</div>
+                    <div class="vibe-score-number {tier}">{score}<span style="font-size:1.4rem;font-weight:400;color:#475569">/10</span></div>
+                    <div><span class="vibe-score-tag {tier}">{tag_label}</span></div>
+                    <div class="vibe-reason">{grade["vibe_reason"]}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                if metrics:
+                    bars_html = (
+                        '<div class="audit-card" style="margin-top:0;">'
+                        '<div class="audit-card-title sonic">Frequency Balance</div>'
+                        '<div class="freq-bar-wrap">'
+                        + freq_bar_html("Low (Kick/Bass ≤200Hz)", metrics["low_pct"], "low")
+                        + freq_bar_html("Mid (Body 200Hz–4kHz)", metrics["mid_pct"], "mid")
+                        + freq_bar_html("High (Snares/Hats >4kHz)", metrics["high_pct"], "high")
+                        + f'<div style="font-size:0.7rem;color:#475569;margin-top:0.4rem;">Centroid: {metrics["centroid_hz"]:.0f} Hz · Duration: {metrics["duration"]}s</div>'
+                        + '</div></div>'
+                    )
+                    st.markdown(bars_html, unsafe_allow_html=True)
+
+            with right_col:
+                if grade["arrangement"]:
+                    st.markdown(f"""
+                    <div class="audit-card">
+                        <div class="audit-card-title arrangement">📐 Arrangement Critique</div>
+                        <div class="audit-card-body">{grade["arrangement"]}</div>
                     </div>
                     """, unsafe_allow_html=True)
 
-                    if metrics:
-                        bars_html = (
-                            '<div class="audit-card" style="margin-top:0;">'
-                            '<div class="audit-card-title sonic">Frequency Balance</div>'
-                            '<div class="freq-bar-wrap">'
-                            + freq_bar_html("Low (Kick/Bass ≤200Hz)", metrics["low_pct"], "low")
-                            + freq_bar_html("Mid (Body 200Hz–4kHz)", metrics["mid_pct"], "mid")
-                            + freq_bar_html("High (Snares/Hats >4kHz)", metrics["high_pct"], "high")
-                            + f'<div style="font-size:0.7rem;color:#475569;margin-top:0.4rem;">Centroid: {metrics["centroid_hz"]:.0f} Hz · Duration: {metrics["duration"]}s</div>'
-                            + '</div></div>'
-                        )
-                        st.markdown(bars_html, unsafe_allow_html=True)
+                if grade["sonic_kick"]:
+                    st.markdown(f"""
+                    <div class="audit-card">
+                        <div class="audit-card-title sonic">🔊 Sonic Balance — Kick &amp; Bass</div>
+                        <div class="audit-card-body">{grade["sonic_kick"]}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
 
-                with right_col:
-                    if grade["arrangement"]:
-                        st.markdown(f"""
-                        <div class="audit-card">
-                            <div class="audit-card-title arrangement">📐 Arrangement Critique</div>
-                            <div class="audit-card-body">{grade["arrangement"]}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
+                if grade["sonic_high"]:
+                    st.markdown(f"""
+                    <div class="audit-card">
+                        <div class="audit-card-title sonic">✨ Sonic Balance — High End</div>
+                        <div class="audit-card-body">{grade["sonic_high"]}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
 
-                    if grade["sonic_kick"]:
-                        st.markdown(f"""
-                        <div class="audit-card">
-                            <div class="audit-card-title sonic">🔊 Sonic Balance — Kick &amp; Bass</div>
-                            <div class="audit-card-body">{grade["sonic_kick"]}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
+            _save_buttons(
+                f"Executive Producer Audit\nGenre: {advice_genre}\n\n{beat_grade_raw}",
+                "executive_producer_audit.txt",
+                "tab1_audit",
+            )
 
-                    if grade["sonic_high"]:
-                        st.markdown(f"""
-                        <div class="audit-card">
-                            <div class="audit-card-title sonic">✨ Sonic Balance — High End</div>
-                            <div class="audit-card-body">{grade["sonic_high"]}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
+        else:
+            st.info("Executive Producer Audit could not be generated for this track.")
 
-            else:
-                st.info("Executive Producer Audit could not be generated for this track.")
-
-            st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-            with st.expander("Raw GPT responses"):
-                st.text("── Three-Move Advice ──\n" + advice)
-                if beat_grade_raw:
-                    st.text("\n── Executive Producer Audit ──\n" + beat_grade_raw)
+        st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+        with st.expander("Raw GPT responses"):
+            st.text("── Three-Move Advice ──\n" + advice)
+            if beat_grade_raw:
+                st.text("\n── Executive Producer Audit ──\n" + beat_grade_raw)
 
     else:
         if st.session_state.analysis is not None:
@@ -875,8 +983,11 @@ with tab2:
     )
 
     if midi_file is not None:
+        if st.button("🔄 Re-analyze", key="reanalyze_midi", help="Clear cached results and run fresh AI analysis"):
+            st.session_state.midi_analysis = None
+
         cached_midi = st.session_state.midi_analysis
-        if cached_midi is None or cached_midi.get("filename") != midi_file.name:
+        if cached_midi is None or cached_midi.get("filename") != midi_file.name or cached_midi.get("genre") != selected_genre:
             with st.spinner("Parsing MIDI file…"):
                 try:
                     midi_data = analyze_midi(midi_file.read())
@@ -893,101 +1004,133 @@ with tab2:
 
             st.session_state.midi_analysis = {
                 "filename": midi_file.name,
+                "genre": selected_genre,
                 "midi_data": midi_data,
                 "advice": midi_advice,
+                "analyzed_at": datetime.datetime.now(),
             }
-            st.rerun()
-        else:
-            m      = st.session_state.midi_analysis
-            md     = m["midi_data"]
-            advice = m.get("advice", "")
 
-            st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+        m      = st.session_state.midi_analysis
+        md     = m["midi_data"]
+        advice = m.get("advice", "")
 
-            # ── Stat boxes: BPM, Duration, Key, Pitch Range ──────────────────────
-            key_display = md["key"] if md["key"] else "—"
-            pitch_range_display = (
-                f'{md["pitch_min_name"]} – {md["pitch_max_name"]}'
-                if md["pitch_min_name"] != "—" else "—"
+        st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+
+        # ── Genre indicator ─────────────────────────────────────────────────────
+        _midi_genre_label = m.get("genre", "")
+        if _midi_genre_label:
+            st.markdown(
+                f'<div style="margin-bottom:0.75rem;">'
+                f'<span style="font-size:0.72rem;font-weight:500;'
+                f'background:#1e293b;color:#94a3b8;border:1px solid #334155;'
+                f'border-radius:999px;padding:0.15rem 0.6rem;'
+                f'letter-spacing:0.04em;text-transform:uppercase;">Genre: {_midi_genre_label}</span>'
+                f'</div>',
+                unsafe_allow_html=True,
             )
 
-            c1, c2, c3, c4 = st.columns(4)
-            with c1:
-                st.markdown(f"""
-                <div class="stat-box">
-                    <div class="stat-label">BPM</div>
-                    <div class="stat-value">{md["bpm"]}</div>
-                </div>
-                """, unsafe_allow_html=True)
-            with c2:
-                st.markdown(f"""
-                <div class="stat-box">
-                    <div class="stat-label">Duration</div>
-                    <div class="stat-value">{md["duration"]}s</div>
-                </div>
-                """, unsafe_allow_html=True)
-            with c3:
-                st.markdown(f"""
-                <div class="stat-box">
-                    <div class="stat-label">Key Signature</div>
-                    <div class="stat-value-sm">{key_display}</div>
-                </div>
-                """, unsafe_allow_html=True)
-            with c4:
-                st.markdown(f"""
-                <div class="stat-box">
-                    <div class="stat-label">Pitch Range</div>
-                    <div class="stat-value-sm">{pitch_range_display}</div>
-                </div>
-                """, unsafe_allow_html=True)
+        # ── Stat boxes: BPM, Duration, Key, Pitch Range ──────────────────────
+        key_display = md["key"] if md["key"] else "—"
+        pitch_range_display = (
+            f'{md["pitch_min_name"]} – {md["pitch_max_name"]}'
+            if md["pitch_min_name"] != "—" else "—"
+        )
 
-            st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            st.markdown(f"""
+            <div class="stat-box">
+                <div class="stat-label">BPM</div>
+                <div class="stat-value">{md["bpm"]}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with c2:
+            st.markdown(f"""
+            <div class="stat-box">
+                <div class="stat-label">Duration</div>
+                <div class="stat-value">{md["duration"]}s</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with c3:
+            st.markdown(f"""
+            <div class="stat-box">
+                <div class="stat-label">Key Signature</div>
+                <div class="stat-value-sm">{key_display}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with c4:
+            st.markdown(f"""
+            <div class="stat-box">
+                <div class="stat-label">Pitch Range</div>
+                <div class="stat-value-sm">{pitch_range_display}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-            # ── Instrument list ──────────────────────────────────────────────────
-            st.markdown("#### 🎹 Instruments")
+        st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 
-            if md["instruments"]:
-                rows_html = ""
-                for inst in md["instruments"]:
-                    drum_badge = '<span class="midi-drum-badge">DRUMS</span>' if inst["is_drum"] else ""
-                    rows_html += (
-                        f'<div class="midi-inst-row">'
-                        f'<span><span class="midi-inst-name">{inst["name"]}</span>{drum_badge}</span>'
-                        f'<span class="midi-inst-notes">{inst["note_count"]:,} notes</span>'
-                        f'</div>'
-                    )
-                st.markdown(
-                    f'<div class="audit-card" style="padding:0.8rem 1.2rem;">{rows_html}</div>',
-                    unsafe_allow_html=True,
+        # ── Instrument list ──────────────────────────────────────────────────
+        st.markdown("#### 🎹 Instruments")
+
+        if md["instruments"]:
+            rows_html = ""
+            for inst in md["instruments"]:
+                drum_badge = '<span class="midi-drum-badge">DRUMS</span>' if inst["is_drum"] else ""
+                rows_html += (
+                    f'<div class="midi-inst-row">'
+                    f'<span><span class="midi-inst-name">{inst["name"]}</span>{drum_badge}</span>'
+                    f'<span class="midi-inst-notes">{inst["note_count"]:,} notes</span>'
+                    f'</div>'
                 )
+            st.markdown(
+                f'<div class="audit-card" style="padding:0.8rem 1.2rem;">{rows_html}</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.info("No instrument tracks found in this MIDI file.")
+
+        # ── Three-Move advice ────────────────────────────────────────────────
+        if advice:
+            st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+            midi_genre = m.get("genre", "")
+            midi_analyzed_at = m.get("analyzed_at")
+            midi_analyzed_at_str = midi_analyzed_at.strftime("%-I:%M %p") if midi_analyzed_at else ""
+            st.markdown(
+                f'#### 🎯 Three-Move Production Advice'
+                f'<span style="margin-left:0.6rem;font-size:0.72rem;font-weight:500;'
+                f'background:#1e293b;color:#94a3b8;border:1px solid #334155;'
+                f'border-radius:999px;padding:0.15rem 0.55rem;vertical-align:middle;'
+                f'letter-spacing:0.02em;">Genre: {midi_genre}</span>'
+                + (f'<span style="margin-left:0.5rem;font-size:0.72rem;color:#64748b;vertical-align:middle;">'
+                   f'Last analyzed at {midi_analyzed_at_str}</span>' if midi_analyzed_at_str else ""),
+                unsafe_allow_html=True,
+            )
+
+            moves = parse_moves(advice)
+            icons  = {"Drums": "🥁", "Texture": "🌊", "Mix": "🎛️"}
+            labels = ["Drums", "Texture", "Mix"]
+
+            if moves:
+                for i, label in enumerate(labels, 1):
+                    content = moves.get(label, "")
+                    if content:
+                        st.markdown(f"""
+                        <div class="move-card">
+                            <div class="move-title">Move {i} — {icons.get(label, "")} {label}</div>
+                            <div class="move-body">{content}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
             else:
-                st.info("No instrument tracks found in this MIDI file.")
+                st.markdown(f"""
+                <div class="move-card">
+                    <div class="move-body">{advice}</div>
+                </div>
+                """, unsafe_allow_html=True)
 
-            # ── Three-Move advice ────────────────────────────────────────────────
-            if advice:
-                st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-                st.markdown("#### 🎯 Three-Move Production Advice")
-
-                moves = parse_moves(advice)
-                icons  = {"Drums": "🥁", "Texture": "🌊", "Mix": "🎛️"}
-                labels = ["Drums", "Texture", "Mix"]
-
-                if moves:
-                    for i, label in enumerate(labels, 1):
-                        content = moves.get(label, "")
-                        if content:
-                            st.markdown(f"""
-                            <div class="move-card">
-                                <div class="move-title">Move {i} — {icons.get(label, "")} {label}</div>
-                                <div class="move-body">{content}</div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                else:
-                    st.markdown(f"""
-                    <div class="move-card">
-                        <div class="move-body">{advice}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+            _save_buttons(
+                f"Three-Move Production Advice (MIDI)\nGenre: {midi_genre}\n\n{advice}",
+                "three_move_advice_midi.txt",
+                "tab2_moves",
+            )
 
     else:
         if st.session_state.midi_analysis is not None:
