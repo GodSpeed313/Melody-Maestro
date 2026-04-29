@@ -1,0 +1,35 @@
+name: Governance Watcher
+
+on:
+  schedule:
+    - cron: '0 */12 * * *'
+  workflow_dispatch:
+
+jobs:
+  governance-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run governance watcher
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.PILogs }}
+          GITHUB_TOKEN: ${{ secrets.PISCRIPTGOVERNANCE }}
+          GITHUB_REPO: GodSpeed313/Melody-Maestro
+        run: python governance_watcher.py
+
+      - name: Upload governance log
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: governance-log
+          path: governance_log.csv
