@@ -4,14 +4,13 @@ import os
 import requests
 
 DISCORD_WEBHOOK_URL = os.environ["DISCORD_WEBHOOK_URL"]
-GH_PAT = os.environ["GH_PAT"]
+GH_PAT = os.environ.get("GH_PAT", "")
 GITHUB_REPO = os.environ.get("GITHUB_REPO", "GodSpeed313/Melody-Maestro")
 LOG_FILE = "governance_log.csv"
 
-HEADERS = {
-    "Authorization": f"Bearer {GH_PAT}",
-    "Accept": "application/vnd.github+json",
-}
+HEADERS = {"Accept": "application/vnd.github+json"}
+if GH_PAT:
+    HEADERS["Authorization"] = f"Bearer {GH_PAT}"
 
 
 def get_recent_commits(since_iso):
