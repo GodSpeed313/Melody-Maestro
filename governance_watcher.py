@@ -45,31 +45,43 @@ def migration_exists_in_repo():
     return False
 
 
+# Governance infrastructure files don't require a README update.
+_GOVERNANCE_PY = {"governance_watcher.py"}
+
 # ── Entity state builder ──────────────────────────────────────────────────────
 
 def build_entity_state(commits, now):
-    py_files_changed = False
+    any_py_without_readme = False
     readme_changed = False
     schema_changed = False
     ir_changed_raw = False
     watcher_changed = False
 
     for commit in commits:
-        for f in get_commit_files(commit["sha"]):
-            if f.endswith(".py"):
-                py_files_changed = True
-            if f.lower() == "readme.md":
-                readme_changed = True
-            if f.endswith(".prisma"):
-                schema_changed = True
-            if f == "governance/ir.json":
-                ir_changed_raw = True
-            if f == "governance_watcher.py":
-                watcher_changed = True
+        files = get_commit_files(commit["sha"])
+        file_set = set(files)
+        lower_set = {f.lower() for f in files}
 
-    # ReadmeCoherence fires when py files changed WITHOUT a readme update.
-    # Encode as 1 so the `>= 1` condition in the resolver triggers correctly.
-    py_changed = 1 if (py_files_changed and not readme_changed) else 0
+        # Per-commit check: did this commit touch a non-governance .py file
+        # without also touching README? Aggregate readme_changed across the
+        # whole window would hide violations when README was updated in an
+        # earlier commit and .py was changed in a later one.
+        non_gov_py = [f for f in files if f.endswith(".py") and f not in _GOVERNANCE_PY]
+        commit_has_readme = "readme.md" in lower_set
+
+        if non_gov_py and not commit_has_readme:
+            any_py_without_readme = True
+        if commit_has_readme:
+            readme_changed = True
+        if any(f.endswith(".prisma") for f in files):
+            schema_changed = True
+        if "governance/ir.json" in file_set:
+            ir_changed_raw = True
+        if "governance_watcher.py" in file_set:
+            watcher_changed = True
+
+    # ReadmeCoherence: 1 triggers the resolver's `>= 1` violation condition.
+    py_changed = 1 if any_py_without_readme else 0
 
     # IRSync fires when ir.json changed WITHOUT a matching watcher update.
     ir_changed = ir_changed_raw and not watcher_changed
