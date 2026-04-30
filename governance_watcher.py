@@ -109,9 +109,36 @@ def save_trace(trace, now):
     return path
 
 
-def send_discord(status, message):
-    timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-    payload = {"content": f"**[{status}]** {timestamp}: {message}"}
+def build_discord_content(trace, status, repo):
+    _ICONS = {"satisfied": "🟢", "violated": "🔴", "suspended": "⚠️"}
+
+    timestamp = trace.get("timestamp", "")[:19].replace("T", " ") + " UTC"
+    system_state = trace.get("system_state", "running")
+    final_action = trace.get("final_action")
+    constraints = trace.get("constraints", [])
+
+    lines = [f"**[{status}]** · {repo} · {timestamp}"]
+    if final_action:
+        lines.append(f"**System state:** {system_state}  |  **Final action:** {final_action}")
+    else:
+        lines.append(f"**System state:** {system_state}")
+    lines.append("")
+
+    for c in constraints:
+        icon = _ICONS.get(c["status"], "❓")
+        lines.append(
+            f"{icon} **{c['name']}** [{c['priority']}] — {c.get('evaluation', '')}"
+        )
+
+    resolution = trace.get("conflict_resolution")
+    if resolution:
+        lines.append(f"\n⚡ {resolution}")
+
+    return "\n".join(lines)
+
+
+def send_discord(content):
+    payload = {"content": content}
     try:
         requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=10)
     except Exception as e:
@@ -184,7 +211,7 @@ def main():
         status = "I'M ALIVE"
         message = f"All constraints satisfied in {GITHUB_REPO}. System state: {system_state}."
 
-    send_discord(status, message)
+    send_discord(build_discord_content(trace, status, GITHUB_REPO))
     log_result(status, message)
     print(f"[{status}] {message}")
     sys.exit(exit_code)
