@@ -4,12 +4,12 @@ import os
 import requests
 
 DISCORD_WEBHOOK_URL = os.environ["DISCORD_WEBHOOK_URL"]
-GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
+GH_PAT = os.environ["GH_PAT"]
 GITHUB_REPO = os.environ.get("GITHUB_REPO", "GodSpeed313/Melody-Maestro")
 LOG_FILE = "governance_log.csv"
 
 HEADERS = {
-    "Authorization": f"Bearer {GITHUB_TOKEN}",
+    "Authorization": f"Bearer {GH_PAT}",
     "Accept": "application/vnd.github+json",
 }
 

@@ -11,8 +11,9 @@ jobs:
 
     env:
       DISCORD_WEBHOOK_URL: ${{ secrets.PILogs }}
-      GITHUB_TOKEN: ${{ secrets.PISCRIPTGOVERNANCE }}
+      GH_PAT: ${{ secrets.PISCRIPTGOVERNANCE }}
       GITHUB_REPO: GodSpeed313/Melody-Maestro
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - uses: actions/checkout@v4
