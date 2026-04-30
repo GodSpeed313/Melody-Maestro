@@ -18,6 +18,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PISCRIPTGOVERNANCE }}
 
       - name: Check out Continuum (Pi Script engine)
         uses: actions/checkout@v4
@@ -39,9 +41,20 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}/continuum
         run: python governance_watcher.py
 
-      - name: Upload governance log
+      - name: Commit trace to repository
+        if: always()
+        run: |
+          git config user.name "Spidey Bot"
+          git config user.email "governance-bot@melody-maestro"
+          git add governance/traces/
+          git diff --cached --quiet || git commit -m "chore: governance trace $(date -u +%Y-%m-%dT%H:%M:%SZ) [skip ci]"
+          git push
+
+      - name: Upload governance artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: governance-log
-          path: governance_log.csv
+          path: |
+            governance_log.csv
+            governance/traces/
