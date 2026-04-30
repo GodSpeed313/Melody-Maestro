@@ -1,0 +1,40 @@
+{
+  "timestamp": "2026-04-30T23:12:53.081Z",
+  "domain": "melody_maestro_governance",
+  "entity": "MelodyMaestroRepo [session_id: governance-2026-04-30]",
+  "trigger_type": "event",
+  "triggered_by": "state snapshot received for MelodyMaestroRepo",
+  "constraints": [
+    {
+      "name": "ReadmeCoherence",
+      "priority": "high",
+      "status": "violated",
+      "rule_kind": "conditional_rule",
+      "evaluation": "condition met: py_changed 1.0 >= 1.0",
+      "map_match": null,
+      "action": "flag + escalate"
+    },
+    {
+      "name": "SchemaIntegrity",
+      "priority": "critical",
+      "status": "satisfied",
+      "rule_kind": "equality_rule",
+      "evaluation": "migration_exists = True, equals expected True",
+      "map_match": null,
+      "action": null
+    },
+    {
+      "name": "IRSync",
+      "priority": "critical",
+      "status": "satisfied",
+      "rule_kind": "conditional_rule",
+      "evaluation": "condition not met: ir_changed 0.0 == 1.0",
+      "map_match": null,
+      "action": null
+    }
+  ],
+  "conflict_resolution": null,
+  "final_action": "flag + escalate",
+  "system_state": "escalated",
+  "human_text": "A condition was met that triggered the rule 'ReadmeCoherence': condition met: py_changed 1.0 >= 1.0. This has been logged and sent to a human reviewer. The issue has been passed to a human reviewer."
+}
