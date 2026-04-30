@@ -1,0 +1,66 @@
+// Pi Script v0.1 — Melody Maestro Governance Policy
+// Domain: melody_maestro_governance
+// Governs repository coherence for GodSpeed313/Melody-Maestro
+//
+// Three constraints, all targeting silent drift:
+//   1. ReadmeCoherence  — .py changes require README.md update
+//   2. SchemaIntegrity  — schema changes require a migration file
+//   3. IRSync           — ir.json changes require governance_watcher.py update
+//
+// Evaluated every 12 hours by governance_watcher.py via GitHub Actions.
+// Traces posted to Discord. Saved to governance/traces/.
+//
+// This file is locked for the indefinite testing run.
+// Do not modify without updating governance/ir.json and governance_watcher.py.
+
+domain melody_maestro_governance {
+    audit_interval: 12 hours
+    tiebreaker:     timestamp_asc
+}
+
+entity MelodyMaestroRepo {
+    py_changed:          boolean
+    readme_changed:      boolean
+    schema_changed:      boolean
+    migration_exists:    boolean
+    ir_changed:          boolean
+    watcher_changed:     boolean
+    commit_count:        integer
+    session_id:          identifier
+}
+
+constraint ReadmeCoherence {
+    priority:     high
+    rule:         if MelodyMaestroRepo.py_changed >= 1 then require readme_changed before committing
+    on_violation: flag + escalate
+    decay_check:  12 hours
+}
+
+constraint SchemaIntegrity {
+    priority:     critical
+    rule:         MelodyMaestroRepo.migration_exists must equal true
+    on_violation: freeze + escalate
+    decay_check:  12 hours
+}
+
+constraint IRSync {
+    priority:     critical
+    rule:         if MelodyMaestroRepo.ir_changed is true then require watcher_changed before committing
+    on_violation: flag + escalate
+    decay_check:  12 hours
+}
+
+enforce {
+    entity:      MelodyMaestroRepo
+    constraints: [ReadmeCoherence, SchemaIntegrity, IRSync]
+}
+
+arbiter MaestroArbiter {
+    acceptable_evolution:  ["decay_interval_tuning", "priority_adjustment", "new_constraint_addition"]
+    never_acceptable:      ["constraint_removal", "schema_integrity_bypass", "ir_sync_bypass", "audit_disable"]
+    requires_human_review: ["entity_field_addition", "enforcement_scope_change", "domain_boundary_change"]
+    acceptance_monitor: {
+        threshold: 0.9
+        window:    30 days
+    }
+}

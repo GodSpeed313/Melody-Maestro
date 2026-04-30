@@ -1,0 +1,113 @@
+{
+  "domain": "melody_maestro_governance",
+  "audit_interval": {
+    "value": 12.0,
+    "unit": "hours"
+  },
+  "tiebreaker": "timestamp_asc",
+  "entities": {
+    "MelodyMaestroRepo": {
+      "py_changed": "boolean",
+      "readme_changed": "boolean",
+      "schema_changed": "boolean",
+      "migration_exists": "boolean",
+      "ir_changed": "boolean",
+      "watcher_changed": "boolean",
+      "commit_count": "integer",
+      "session_id": "identifier"
+    }
+  },
+  "constraints": {
+    "ReadmeCoherence": {
+      "priority": "high",
+      "rule": {
+        "kind": "conditional_rule",
+        "ref": "MelodyMaestroRepo.py_changed",
+        "op": ">=",
+        "value": 1,
+        "require": "readme_changed",
+        "before": "committing"
+      },
+      "on_violation": [
+        "flag",
+        "escalate"
+      ],
+      "escalation": [],
+      "decay_check": {
+        "value": 12.0,
+        "unit": "hours"
+      }
+    },
+    "SchemaIntegrity": {
+      "priority": "critical",
+      "rule": {
+        "kind": "equality_rule",
+        "ref": "MelodyMaestroRepo.migration_exists",
+        "value": true
+      },
+      "on_violation": [
+        "freeze",
+        "escalate"
+      ],
+      "escalation": [],
+      "decay_check": {
+        "value": 12.0,
+        "unit": "hours"
+      }
+    },
+    "IRSync": {
+      "priority": "critical",
+      "rule": {
+        "kind": "conditional_rule",
+        "ref": "MelodyMaestroRepo.ir_changed",
+        "op": "==",
+        "value": true,
+        "require": "watcher_changed",
+        "before": "committing"
+      },
+      "on_violation": [
+        "flag",
+        "escalate"
+      ],
+      "escalation": [],
+      "decay_check": {
+        "value": 12.0,
+        "unit": "hours"
+      }
+    }
+  },
+  "maps": {},
+  "enforce": {
+    "MelodyMaestroRepo": [
+      "ReadmeCoherence",
+      "SchemaIntegrity",
+      "IRSync"
+    ]
+  },
+  "arbiter": {
+    "name": "MaestroArbiter",
+    "acceptable_evolution": [
+      "decay_interval_tuning",
+      "priority_adjustment",
+      "new_constraint_addition"
+    ],
+    "never_acceptable": [
+      "constraint_removal",
+      "schema_integrity_bypass",
+      "ir_sync_bypass",
+      "audit_disable"
+    ],
+    "requires_human_review": [
+      "entity_field_addition",
+      "enforcement_scope_change",
+      "domain_boundary_change"
+    ],
+    "acceptance_monitor": {
+      "threshold": 0.9,
+      "window": {
+        "value": 30.0,
+        "unit": "days"
+      }
+    }
+  }
+}
