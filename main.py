@@ -1153,3 +1153,4 @@ st.markdown("""
     The Architect · Powered by librosa + GPT-4o · Three-Move Rule · Executive Producer Audit
 </div>
 """, unsafe_allow_html=True)
+
