@@ -9,8 +9,15 @@ jobs:
   governance-check:
     runs-on: ubuntu-latest
 
+    env:
+      DISCORD_WEBHOOK_URL: ${{ secrets.PILogs }}
+      GITHUB_TOKEN: ${{ secrets.PISCRIPTGOVERNANCE }}
+      GITHUB_REPO: GodSpeed313/Melody-Maestro
+
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PISCRIPTGOVERNANCE }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -21,10 +28,6 @@ jobs:
         run: pip install requests
 
       - name: Run governance watcher
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.PILogs }}
-          GITHUB_TOKEN: ${{ secrets.PISCRIPTGOVERNANCE }}
-          GITHUB_REPO: GodSpeed313/Melody-Maestro
         run: python governance_watcher.py
 
       - name: Upload governance log
