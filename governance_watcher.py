@@ -13,6 +13,7 @@ LOG_FILE = "governance_log.csv"
 _ROOT = os.path.dirname(os.path.abspath(__file__))
 IR_PATH = os.path.join(_ROOT, "governance", "ir.json")
 TRACES_DIR = os.path.join(_ROOT, "governance", "traces")
+LAST_RUN_FILE = os.path.join(_ROOT, "governance", "last_run.txt")
 
 HEADERS = {"Accept": "application/vnd.github+json"}
 if GH_PAT:
@@ -161,7 +162,11 @@ def main():
     from pi_script.resolver import resolve
 
     now = datetime.datetime.now(datetime.timezone.utc)
-    since = (now - datetime.timedelta(hours=24)).isoformat()
+    if os.path.exists(LAST_RUN_FILE):
+        with open(LAST_RUN_FILE, encoding="utf-8") as f:
+            since = f.read().strip()
+    else:
+        since = (now - datetime.timedelta(hours=24)).isoformat()
 
     with open(IR_PATH, encoding="utf-8") as f:
         ir = json.load(f)
@@ -214,6 +219,10 @@ def main():
     send_discord(build_discord_content(trace, status, GITHUB_REPO))
     log_result(status, message)
     print(f"[{status}] {message}")
+
+    with open(LAST_RUN_FILE, "w", encoding="utf-8") as f:
+        f.write(now.isoformat())
+
     sys.exit(exit_code)
 
 

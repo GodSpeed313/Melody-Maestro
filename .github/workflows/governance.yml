@@ -46,7 +46,7 @@ jobs:
         run: |
           git config user.name "Spidey Bot"
           git config user.email "governance-bot@melody-maestro"
-          git add governance/traces/
+          git add governance/traces/ governance/last_run.txt
           git diff --cached --quiet || git commit -m "chore: governance trace $(date -u +%Y-%m-%dT%H:%M:%SZ) [skip ci]"
           git push
 
