@@ -1,12 +1,15 @@
 import os
 import tempfile
 import datetime
+from dotenv import load_dotenv
 import streamlit as st
 import streamlit.components.v1 as components
 import librosa
 import numpy as np
 import pretty_midi
 from openai import OpenAI
+
+load_dotenv()
 
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -199,14 +202,78 @@ if "midi_analysis" not in st.session_state:
     st.session_state.midi_analysis = None
 
 
+# ── Genre context dictionary ────────────────────────────────────────────────────
+GENRE_CONTEXT = {
+    "Rap": {
+        "sonic_refs": ["808s", "trap hi-hat rolls", "hard-hitting kicks", "dark melodies", "street energy", "punchy snares", "layered ad-libs"],
+        "drums":   "trap patterns, 808 sub kicks, rolling hi-hats, snappy snares",
+        "texture": "dark synth pads, vocal chops, ominous melodies, heavy bass lines",
+        "mix":     "punchy low-end, clear vocal space, controlled 808 sub",
+        "forbidden": ["house", "club", "dance floor", "EDM", "pop crossover", "four-on-the-floor"],
+    },
+    "Hip-Hop": {
+        "sonic_refs": ["boom bap or trap influence", "sample-flipping", "heavy kicks", "snappy snares", "melodic loops", "raw energy"],
+        "drums":   "boom bap or trap patterns, weighty kicks, crisp snares, swinging hi-hats",
+        "texture": "sampled loops, vocal layers, warm pads, melodic hooks",
+        "mix":     "balanced low-end, clear mid presence, punchy transients",
+        "forbidden": ["house", "club", "dance floor", "EDM", "pop crossover"],
+    },
+    "R&B": {
+        "sonic_refs": ["smooth chord voicings", "layered harmonies", "lush pads", "silky vocal presence", "emotional progressions", "warm bass"],
+        "drums":   "laid-back groove, soft kick, snappy snare or clap, subtle hi-hats",
+        "texture": "lush pads, warm Rhodes, smooth synth leads, rich chord stacks",
+        "mix":     "warm vocal-forward mix, smooth low-end, polished high-end",
+        "forbidden": ["trap", "808 sub", "street energy", "hard-hitting", "EDM", "house"],
+    },
+    "Old School R&B / Hip-Hop": {
+        "sonic_refs": ["soul samples", "boom bap grooves", "warm Rhodes", "MPC-style chops", "vinyl crackle texture", "dusty drum breaks", "classic hip-hop energy"],
+        "drums":   "boom bap breaks, dusty snares, swinging hi-hats, MPC-chopped samples",
+        "texture": "soul samples, warm Rhodes, vinyl texture, classic loop-based arrangements",
+        "mix":     "warm slightly lo-fi character, punchy but not over-compressed",
+        "forbidden": ["trap", "808", "modern trap", "EDM", "house", "club", "dance floor"],
+    },
+    "Pop": {
+        "sonic_refs": ["catchy hooks", "polished production", "layered vocals", "bright synths", "punchy drums", "radio-ready mix"],
+        "drums":   "punchy kick, bright snare, driving hi-hats, clean programming",
+        "texture": "bright synth leads, layered vocals, wide stereo pads, sparkly high-end",
+        "mix":     "loud bright wide mix, modern loudness standard, hook-forward",
+        "forbidden": [],
+    },
+    "Alternative Rock": {
+        "sonic_refs": ["distorted guitars", "live drum feel", "raw mix energy", "powerful riffs", "dynamic range", "gritty texture"],
+        "drums":   "live-feeling kick and snare, driving hi-hats, crash cymbals, natural room sound",
+        "texture": "distorted guitars, overdriven bass, raw synth layers, layered guitars",
+        "mix":     "raw wide dynamic mix, natural transients, not over-compressed",
+        "forbidden": ["808", "trap", "EDM", "house", "club"],
+    },
+}
+
+
+def genre_context_block(genre: str) -> str:
+    ctx = GENRE_CONTEXT.get(genre, GENRE_CONTEXT["Rap"])
+    refs = ", ".join(ctx["sonic_refs"])
+    forbidden = ", ".join(f"'{t}'" for t in ctx["forbidden"]) if ctx["forbidden"] else "none"
+    return (
+        f"GENRE RULES — {genre.upper()}:\n"
+        f"Sonic references to use: {refs}.\n"
+        f"Drums feel: {ctx['drums']}.\n"
+        f"Texture feel: {ctx['texture']}.\n"
+        f"Mix character: {ctx['mix']}.\n"
+        f"Forbidden terms (never use these): {forbidden}.\n"
+        f"CRITICAL: Do NOT infer genre from BPM. BPM alone never determines genre.\n\n"
+    )
+
+
 # ── OpenAI client ───────────────────────────────────────────────────────────────
 def get_openai_client():
-    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
-    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
-    if not base_url or not api_key:
-        st.error("OpenAI integration not configured.")
-        st.stop()
-    return OpenAI(base_url=base_url, api_key=api_key)
+    groq_key = os.environ.get("GROQ_API_KEY")
+    openai_key = os.environ.get("OPENAI_API_KEY")
+    if groq_key:
+        return OpenAI(api_key=groq_key, base_url="https://api.groq.com/openai/v1")
+    if openai_key:
+        return OpenAI(api_key=openai_key)
+    st.error("No API key found. Add GROQ_API_KEY or OPENAI_API_KEY to your .env file.")
+    st.stop()
 
 
 # ── Audio analysis ──────────────────────────────────────────────────────────────
@@ -325,15 +392,7 @@ def analyze_midi(file_bytes: bytes):
 # ── Three-Move advice ───────────────────────────────────────────────────────────
 def get_advice(bpm: float, key: str, client: OpenAI, genre: str = "Rap"):
     system_prompt = (
-        f"CRITICAL INSTRUCTION — READ FIRST: The producer is working in {genre}. "
-        f"Every single recommendation must use {genre}-specific language, references, and techniques. "
-        f"Do NOT reference dance music, house, club tracks, EDM, or pop crossover unless the genre is literally 'Pop'. "
-        f"Do NOT infer genre from BPM. BPM alone never determines genre. "
-        f"If genre is 'Old School R&B / Hip-Hop': reference soul samples, boom bap grooves, warm Rhodes, "
-        f"MPC-style chops, vinyl crackle texture, dusty drum breaks, and classic hip-hop energy. "
-        f"If genre is 'Rap' or 'Hip-Hop': reference 808s, trap hi-hat rolls, hard-hitting kicks, and street energy. "
-        f"If genre is 'R&B': reference smooth chord voicings, layered harmonies, and lush pads. "
-        f"If genre is 'Alternative Rock': reference distorted guitars, live drum feel, and raw mix energy. "
+        f"{genre_context_block(genre)}"
         "You are The Architect — an elite FL Studio producer and sound designer. "
         "You give precise, actionable advice using the Three-Move Rule: every response "
         "covers exactly three areas in order — Drums, Texture, and Mix. "
@@ -363,7 +422,7 @@ def get_advice(bpm: float, key: str, client: OpenAI, genre: str = "Rap"):
         "<specific mix advice for the BPM/key>. Plugin: <FL Studio stock plugin name> — <how to use it>"
     )
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model="llama-3.3-70b-versatile",
         timeout=25,
         messages=[
             {"role": "system", "content": system_prompt},
@@ -401,15 +460,7 @@ def get_beat_grade(bpm: float, key: str, metrics: dict, client: OpenAI, genre: s
     centroid = metrics["centroid_hz"]
 
     system_prompt = (
-        f"CRITICAL INSTRUCTION — READ FIRST: The producer is working in {genre}. "
-        f"Every critique — Vibe Reason, Arrangement, Sonic Balance — must use {genre}-specific language and references. "
-        f"Do NOT say 'house', 'club', 'dance floor', 'EDM', or 'pop crossover' unless the genre is literally 'Pop'. "
-        f"Do NOT infer genre from BPM. BPM alone never determines genre. "
-        f"If genre is 'Old School R&B / Hip-Hop': the Vibe Reason MUST reference boom bap feel, "
-        f"soul warmth, sample-based texture, or classic hip-hop energy — NEVER dance music. "
-        f"If genre is 'Rap' or 'Hip-Hop': reference trap energy, 808 weight, or street feel. "
-        f"If genre is 'R&B': reference smoothness, vocal presence, and emotional chord movement. "
-        f"If genre is 'Alternative Rock': reference raw energy, guitar presence, and live feel. "
+        f"{genre_context_block(genre)}"
         "You are an Executive Producer reviewing a track from a session in FL Studio. "
         "You write like a world-class A&R — direct, specific, no filler. "
         "Always use FL Studio terminology. "
@@ -449,7 +500,7 @@ def get_beat_grade(bpm: float, key: str, metrics: dict, client: OpenAI, genre: s
     )
 
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model="llama-3.3-70b-versatile",
         timeout=25,
         messages=[
             {"role": "system", "content": system_prompt},
@@ -541,7 +592,7 @@ def get_midi_advice(midi_data: dict, client: OpenAI, genre: str = "Rap"):
         "Reference real FL Studio shortcuts like Alt+U, Ctrl+Q, Shift+drag, etc. "
         "No filler. No generic tips. One shortcut or plugin per move. "
         "Sound like a world-class producer giving a peer a session breakdown. "
-        f"The producer is working in the {genre} genre — tailor every recommendation to the conventions, energy, and FL Studio workflow of that style."
+        f"{genre_context_block(genre)}"
     )
     user_prompt = (
         f"Genre: {genre}\n"
@@ -562,7 +613,7 @@ def get_midi_advice(midi_data: dict, client: OpenAI, genre: str = "Rap"):
         "<specific mix advice for the BPM/key/instruments>. Plugin: <FL Studio stock plugin name> — <how to use it>"
     )
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model="llama-3.3-70b-versatile",
         timeout=25,
         messages=[
             {"role": "system", "content": system_prompt},
@@ -606,7 +657,7 @@ def chat_with_architect(user_message: str, client: OpenAI):
     messages.append({"role": "user", "content": user_message})
 
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model="llama-3.3-70b-versatile",
         timeout=25,
         messages=messages,
         max_tokens=600,
@@ -835,7 +886,7 @@ with tab1:
         # ── Three-Move advice ───────────────────────────────────────────────────
         advice_genre = analysis.get("genre", "")
         analyzed_at = analysis.get("analyzed_at")
-        analyzed_at_str = analyzed_at.strftime("%-I:%M %p") if analyzed_at else ""
+        analyzed_at_str = analyzed_at.strftime("%I:%M %p").lstrip("0") if analyzed_at else ""
         st.markdown(
             f'#### 🎯 Three-Move Production Advice'
             f'<span style="margin-left:0.6rem;font-size:0.72rem;font-weight:500;'
