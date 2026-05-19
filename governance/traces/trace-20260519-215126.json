@@ -1,0 +1,40 @@
+{
+  "timestamp": "2026-05-19T21:51:28.334Z",
+  "domain": "melody_maestro_governance",
+  "entity": "MelodyMaestroRepo [session_id: governance-2026-05-19]",
+  "trigger_type": "event",
+  "triggered_by": "state snapshot received for MelodyMaestroRepo",
+  "constraints": [
+    {
+      "name": "ReadmeCoherence",
+      "priority": "high",
+      "status": "satisfied",
+      "rule_kind": "conditional_rule",
+      "evaluation": "condition not met: py_changed 0.0 >= 1.0",
+      "map_match": null,
+      "action": null
+    },
+    {
+      "name": "SchemaIntegrity",
+      "priority": "critical",
+      "status": "violated",
+      "rule_kind": "equality_rule",
+      "evaluation": "migration_exists is False, expected True",
+      "map_match": null,
+      "action": "freeze + escalate"
+    },
+    {
+      "name": "IRSync",
+      "priority": "critical",
+      "status": "satisfied",
+      "rule_kind": "conditional_rule",
+      "evaluation": "condition not met: ir_changed 0.0 == 1.0",
+      "map_match": null,
+      "action": null
+    }
+  ],
+  "conflict_resolution": null,
+  "final_action": "freeze + escalate",
+  "system_state": "frozen",
+  "human_text": "The rule 'SchemaIntegrity' was broken: migration_exists is False, expected True. The following action was taken: freeze + escalate. The system is currently paused and cannot send further responses until this is resolved."
+}
