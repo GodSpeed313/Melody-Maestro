@@ -200,6 +200,8 @@ if "analysis" not in st.session_state:
     st.session_state.analysis = None
 if "midi_analysis" not in st.session_state:
     st.session_state.midi_analysis = None
+if "theory_chord_idx" not in st.session_state:
+    st.session_state.theory_chord_idx = None
 
 
 # ── Genre context dictionary ────────────────────────────────────────────────────
@@ -247,6 +249,193 @@ GENRE_CONTEXT = {
         "forbidden": ["808", "trap", "EDM", "house", "club"],
     },
 }
+
+
+# ── Music theory ────────────────────────────────────────────────────────────────
+_NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+_ENHARMONIC = {
+    'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#',
+    'Cb': 'B', 'Fb': 'E', 'E#': 'F', 'B#': 'C',
+}
+_SCALE_IV = {
+    'Major': [0, 2, 4, 5, 7, 9, 11],
+    'Minor': [0, 2, 3, 5, 7, 8, 10],
+}
+_DEGREES = {
+    'Major': ['1', '2', '3', '4', '5', '6', '7'],
+    'Minor': ['1', '2', 'b3', '4', '5', 'b6', 'b7'],
+}
+_CHORD_Q = {
+    'Major': ['maj', 'min', 'min', 'maj', 'maj', 'min', 'dim'],
+    'Minor': ['min', 'dim', 'maj', 'min', 'min', 'maj', 'maj'],
+}
+_NUMERALS = {
+    'Major': ['I',  'ii',  'iii', 'IV', 'V',  'vi', 'vii°'],
+    'Minor': ['i',  'ii°', 'III', 'iv', 'v',  'VI', 'VII' ],
+}
+_TRIAD = {'maj': [0, 4, 7], 'min': [0, 3, 7], 'dim': [0, 3, 6]}
+_CHORD_SUFFIX = {'maj': '', 'min': 'm', 'dim': '°'}
+
+THEORY_PROGRESSIONS = {
+    "Rap": {
+        "Minor": [
+            {"name": "Dark Trap",    "degrees": [0, 6, 5, 6], "feel": "Ominous, hard-hitting"},
+            {"name": "Melodic Loop", "degrees": [0, 5, 2, 6], "feel": "Cinematic, tension-heavy"},
+            {"name": "Street Flex",  "degrees": [0, 3, 6, 5], "feel": "Raw gritty loop energy"},
+        ],
+        "Major": [
+            {"name": "Triumphant",   "degrees": [0, 4, 5, 3], "feel": "Anthem, victorious feel"},
+            {"name": "Bounce",       "degrees": [0, 3, 4, 3], "feel": "High energy, summer vibe"},
+        ],
+    },
+    "Hip-Hop": {
+        "Minor": [
+            {"name": "Boom Bap",     "degrees": [0, 3, 4, 0], "feel": "Classic, soulful loop"},
+            {"name": "Cinematic",    "degrees": [0, 6, 2, 5], "feel": "Wide, dramatic movement"},
+        ],
+        "Major": [
+            {"name": "Soul Chop",    "degrees": [0, 3, 4, 5], "feel": "Warm, sample-flip energy"},
+            {"name": "Triumphant",   "degrees": [0, 4, 5, 3], "feel": "Uplift and momentum"},
+        ],
+    },
+    "R&B": {
+        "Minor": [
+            {"name": "Neo-Soul",     "degrees": [0, 3, 6, 2], "feel": "Smooth, emotional depth"},
+            {"name": "2-5-1",        "degrees": [1, 4, 0, 5], "feel": "Jazz-influenced, lush"},
+        ],
+        "Major": [
+            {"name": "Lover Loop",   "degrees": [0, 5, 3, 4], "feel": "Romantic, smooth groove"},
+            {"name": "Classic R&B",  "degrees": [0, 2, 3, 4], "feel": "Uplifting, warm"},
+        ],
+    },
+    "Old School R&B / Hip-Hop": {
+        "Minor": [
+            {"name": "MPC Chop",     "degrees": [0, 3, 6, 5], "feel": "Dusty, warm loop"},
+            {"name": "Soul Loop",    "degrees": [0, 2, 5, 4], "feel": "Vinyl-textured groove"},
+        ],
+        "Major": [
+            {"name": "Dusty Funk",   "degrees": [0, 3, 4, 5], "feel": "Old school bounce"},
+        ],
+    },
+    "Pop": {
+        "Major": [
+            {"name": "Four Chord",   "degrees": [0, 4, 5, 3], "feel": "Radio-ready, catchy"},
+            {"name": "Hook Machine", "degrees": [0, 5, 3, 4], "feel": "Anthemic, singalong"},
+            {"name": "Ascending",    "degrees": [0, 1, 3, 4], "feel": "Bright, building energy"},
+        ],
+        "Minor": [
+            {"name": "Dark Pop",     "degrees": [0, 6, 5, 6], "feel": "Moody, intense"},
+            {"name": "Alt Pop",      "degrees": [0, 5, 2, 6], "feel": "Emotional, dramatic"},
+        ],
+    },
+    "Alternative Rock": {
+        "Minor": [
+            {"name": "Power Riff",   "degrees": [0, 6, 5, 3], "feel": "Driving, raw energy"},
+            {"name": "Alt Anthem",   "degrees": [0, 2, 5, 4], "feel": "Distorted, emotional"},
+        ],
+        "Major": [
+            {"name": "Rock Anthem",  "degrees": [0, 4, 5, 3], "feel": "Stadium, powerful"},
+            {"name": "Alt Bounce",   "degrees": [0, 1, 3, 4], "feel": "Energetic, melodic"},
+        ],
+    },
+}
+
+
+def _norm(note: str) -> str:
+    return _ENHARMONIC.get(note, note)
+
+
+def _parse_key(key_str: str):
+    if not key_str or key_str in ('—', 'Unknown', ''):
+        return 'C', 'Major'
+    parts = key_str.strip().split()
+    root = _norm(parts[0]) if parts else 'C'
+    if root not in _NOTES:
+        root = 'C'
+    mode = parts[1].capitalize() if len(parts) > 1 else 'Major'
+    if mode not in _SCALE_IV:
+        mode = 'Major'
+    return root, mode
+
+
+def _build_scale(root: str, mode: str) -> list:
+    idx = _NOTES.index(_norm(root))
+    return [_NOTES[(idx + i) % 12] for i in _SCALE_IV[mode]]
+
+
+def _build_chords(root: str, mode: str) -> list:
+    scale = _build_scale(root, mode)
+    chords = []
+    for i, note in enumerate(scale):
+        q = _CHORD_Q[mode][i]
+        ni = _NOTES.index(note)
+        notes = [_NOTES[(ni + iv) % 12] for iv in _TRIAD[q]]
+        chords.append({
+            'numeral': _NUMERALS[mode][i],
+            'name': f"{note}{_CHORD_SUFFIX[q]}",
+            'quality': q,
+            'notes': notes,
+            'root': note,
+            'degree': i,
+        })
+    return chords
+
+
+def _relative_key(root: str, mode: str) -> str:
+    idx = _NOTES.index(_norm(root))
+    if mode == 'Major':
+        return f"{_NOTES[(idx + 9) % 12]} Minor"
+    return f"{_NOTES[(idx + 3) % 12]} Major"
+
+
+def _piano_html(scale_notes: set, chord_notes: set) -> str:
+    WHITE = ['C', 'D', 'E', 'F', 'G', 'A', 'B']
+    BLACK = [('C#', 27), ('D#', 67), ('F#', 147), ('G#', 187), ('A#', 227)]
+    W, WH, BW, BH = 40, 120, 26, 76
+
+    def colors(note, is_black):
+        if note in chord_notes:
+            return ('#1d4ed8' if is_black else '#60a5fa', '#ffffff', '#1e40af')
+        if note in scale_notes:
+            return ('#6d28d9' if is_black else '#a78bfa', '#ffffff', '#5b21b6')
+        return (
+            '#0f172a' if is_black else '#e2e8f0',
+            '#64748b' if is_black else '#475569',
+            '#1e293b' if is_black else '#cbd5e1',
+        )
+
+    total_w = 2 * 7 * W + 4
+    parts = [
+        f'<div style="position:relative;width:{total_w}px;height:{WH + 22}px;'
+        f'background:#020617;border-radius:8px;padding:11px 2px;'
+        f'border:1px solid #1e293b;margin:0.5rem 0;">'
+    ]
+
+    for oct in range(2):
+        xo = oct * 7 * W + 2
+        for i, note in enumerate(WHITE):
+            x = xo + i * W
+            bg, tc, bc = colors(note, False)
+            label = note if (note in scale_notes or note in chord_notes) else ''
+            parts.append(
+                f'<div style="position:absolute;left:{x}px;top:11px;width:{W - 2}px;height:{WH}px;'
+                f'background:{bg};border:1px solid {bc};border-radius:0 0 5px 5px;'
+                f'display:flex;align-items:flex-end;justify-content:center;padding-bottom:7px;'
+                f'font-size:8px;font-weight:700;color:{tc};font-family:sans-serif;">{label}</div>'
+            )
+        for note, xr in BLACK:
+            x = xo + xr
+            bg, _, bc = colors(note, True)
+            label = note if (note in scale_notes or note in chord_notes) else ''
+            parts.append(
+                f'<div style="position:absolute;left:{x}px;top:11px;width:{BW}px;height:{BH}px;'
+                f'background:{bg};border:1px solid {bc};border-radius:0 0 4px 4px;z-index:2;'
+                f'display:flex;align-items:flex-end;justify-content:center;padding-bottom:4px;'
+                f'font-size:7px;font-weight:700;color:#fff;font-family:sans-serif;">{label}</div>'
+            )
+
+    parts.append('</div>')
+    return ''.join(parts)
 
 
 def genre_context_block(genre: str) -> str:
@@ -778,7 +967,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-tab1, tab2 = st.tabs(["🎵 Audio", "🎹 MIDI"])
+tab1, tab2, tab3 = st.tabs(["🎵 Audio", "🎹 MIDI", "🎼 Theory"])
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TAB 1 — AUDIO
@@ -1196,6 +1385,210 @@ with tab2:
             </div>
         </div>
         """, unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 3 — THEORY
+# ══════════════════════════════════════════════════════════════════════════════
+with tab3:
+    # ── Determine key source ─────────────────────────────────────────────────
+    auto_root, auto_mode = 'C', 'Major'
+    detected_from = None
+
+    if st.session_state.analysis:
+        k = st.session_state.analysis.get("key", "")
+        if k and k not in ('—', 'Unknown'):
+            auto_root, auto_mode = _parse_key(k)
+            detected_from = st.session_state.analysis.get("filename", "audio")
+
+    if detected_from is None and st.session_state.midi_analysis:
+        k = (st.session_state.midi_analysis.get("midi_data") or {}).get("key") or ""
+        if k and k not in ('—', 'Unknown'):
+            auto_root, auto_mode = _parse_key(k)
+            detected_from = st.session_state.midi_analysis.get("filename", "MIDI")
+
+    # ── Key selector ─────────────────────────────────────────────────────────
+    c_info, c_root, c_mode = st.columns([3, 1, 1])
+    with c_info:
+        if detected_from:
+            st.markdown(
+                f'<div class="sidebar-context">Key auto-detected from '
+                f'<span>{detected_from}</span>. Override below if needed.</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                '<div class="sidebar-context">No track analyzed yet — '
+                'select a key manually below.</div>',
+                unsafe_allow_html=True,
+            )
+    with c_root:
+        root_idx = _NOTES.index(auto_root) if auto_root in _NOTES else 0
+        t_root = st.selectbox("Root note", _NOTES, index=root_idx, key="theory_root")
+    with c_mode:
+        t_mode = st.selectbox(
+            "Mode", ["Major", "Minor"],
+            index=0 if auto_mode == "Major" else 1,
+            key="theory_mode",
+        )
+
+    # Reset chord selection when key changes
+    _tsig = f"{t_root}_{t_mode}"
+    if st.session_state.get("_theory_sig") != _tsig:
+        st.session_state.theory_chord_idx = None
+        st.session_state["_theory_sig"] = _tsig
+
+    # ── Build theory data ─────────────────────────────────────────────────────
+    t_scale  = _build_scale(t_root, t_mode)
+    t_chords = _build_chords(t_root, t_mode)
+    t_degs   = _DEGREES[t_mode]
+    t_rel    = _relative_key(t_root, t_mode)
+
+    # ── Key header ────────────────────────────────────────────────────────────
+    st.markdown(
+        f'<div style="margin:0.5rem 0 0.25rem 0;">'
+        f'<span style="font-size:1.6rem;font-weight:800;color:#a78bfa;">'
+        f'{t_root} {t_mode}</span>'
+        f'<span style="margin-left:0.75rem;font-size:0.8rem;color:#64748b;">'
+        f'Relative: {t_rel}</span>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Scale degrees strip (with semitone intervals between notes) ───────────
+    interval_parts = []
+    for j in range(len(t_scale)):
+        interval_parts.append(
+            f'<div style="text-align:center;background:#1e1b4b;border:1px solid #4c1d95;'
+            f'border-radius:8px;padding:0.4rem 0.6rem;min-width:38px;">'
+            f'<div style="font-size:0.6rem;color:#818cf8;font-weight:600;'
+            f'letter-spacing:0.05em;">{t_degs[j]}</div>'
+            f'<div style="font-size:1rem;color:#a78bfa;font-weight:800;">{t_scale[j]}</div>'
+            f'</div>'
+        )
+        if j < len(t_scale) - 1:
+            n1 = _NOTES.index(t_scale[j])
+            n2 = _NOTES.index(t_scale[j + 1])
+            semis = (n2 - n1) % 12
+            interval_parts.append(
+                f'<div style="display:flex;align-items:center;padding:0 2px;">'
+                f'<div style="font-size:0.65rem;color:#334155;font-weight:600;'
+                f'background:#0f172a;border-radius:4px;padding:2px 4px;">'
+                f'+{semis}</div></div>'
+            )
+    st.markdown(
+        f'<div style="display:flex;gap:4px;margin:0.5rem 0 0.75rem 0;'
+        f'flex-wrap:wrap;align-items:center;">{"".join(interval_parts)}</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Piano keyboard ────────────────────────────────────────────────────────
+    sel_idx = st.session_state.theory_chord_idx
+    chord_ns = (
+        set(t_chords[sel_idx]['notes'])
+        if sel_idx is not None and 0 <= sel_idx < 7
+        else set()
+    )
+    st.markdown(_piano_html(set(t_scale), chord_ns), unsafe_allow_html=True)
+
+    # Legend
+    st.markdown(
+        '<div style="display:flex;gap:1.2rem;margin:0.2rem 0 0.6rem 0;'
+        'font-size:0.72rem;color:#94a3b8;">'
+        '<span style="display:flex;align-items:center;gap:0.3rem;">'
+        '<span style="width:11px;height:11px;background:#a78bfa;border-radius:2px;'
+        'display:inline-block;"></span>Scale note</span>'
+        '<span style="display:flex;align-items:center;gap:0.3rem;">'
+        '<span style="width:11px;height:11px;background:#60a5fa;border-radius:2px;'
+        'display:inline-block;"></span>Chord tone</span>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+
+    # ── Diatonic chords ───────────────────────────────────────────────────────
+    st.markdown("#### 🎹 Diatonic Chords")
+    st.caption("Click a chord to highlight its notes on the piano above.")
+
+    chord_cols = st.columns(7)
+    for ci, chord in enumerate(t_chords):
+        with chord_cols[ci]:
+            is_sel = st.session_state.theory_chord_idx == ci
+            if st.button(
+                f"{chord['numeral']}  {chord['name']}",
+                key=f"chord_{_tsig}_{ci}",
+                use_container_width=True,
+                type="primary" if is_sel else "secondary",
+            ):
+                st.session_state.theory_chord_idx = None if is_sel else ci
+                st.rerun()
+
+    # Selected chord detail
+    if sel_idx is not None and 0 <= sel_idx < 7:
+        c = t_chords[sel_idx]
+        st.markdown(
+            f'<div style="margin:0.5rem 0;font-size:0.85rem;color:#94a3b8;">'
+            f'<span style="color:#a78bfa;font-weight:700;">{c["name"]}</span>'
+            f' · {c["quality"]} triad · Notes: '
+            f'<span style="color:#60a5fa;">'
+            f'{" · ".join(c["notes"])}</span></div>',
+            unsafe_allow_html=True,
+        )
+
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+
+    # ── Genre progressions ─────────────────────────────────────────────────────
+    st.markdown(
+        f'#### 🔁 Genre Progressions'
+        f'<span style="margin-left:0.6rem;font-size:0.72rem;font-weight:500;'
+        f'background:#1e293b;color:#94a3b8;border:1px solid #334155;'
+        f'border-radius:999px;padding:0.15rem 0.55rem;vertical-align:middle;">'
+        f'Genre: {selected_genre}</span>',
+        unsafe_allow_html=True,
+    )
+
+    _genre_progs = THEORY_PROGRESSIONS.get(selected_genre, THEORY_PROGRESSIONS["Rap"])
+    _mode_progs  = _genre_progs.get(t_mode, [])
+
+    if not _mode_progs:
+        st.info(f"No progressions defined for {selected_genre} in {t_mode} yet.")
+    else:
+        for prog in _mode_progs:
+            _seq = [t_chords[d] for d in prog['degrees'] if d < len(t_chords)]
+            _pills = []
+            for pi, pc in enumerate(_seq):
+                _pills.append(
+                    f'<div style="text-align:center;">'
+                    f'<div style="background:#1e293b;border:1px solid #334155;'
+                    f'border-radius:6px;padding:0.25rem 0.7rem;font-weight:700;'
+                    f'color:#a78bfa;font-size:0.9rem;">{pc["name"]}</div>'
+                    f'<div style="font-size:0.65rem;color:#64748b;margin-top:0.15rem;">'
+                    f'{pc["numeral"]}</div></div>'
+                )
+                if pi < len(_seq) - 1:
+                    _pills.append(
+                        '<div style="color:#475569;font-size:1rem;'
+                        'padding-top:0.3rem;">→</div>'
+                    )
+            _pills_html = (
+                '<div style="display:flex;align-items:flex-start;gap:0.4rem;'
+                'flex-wrap:wrap;margin-top:0.5rem;">'
+                + ''.join(_pills) + '</div>'
+            )
+            st.markdown(
+                f'<div class="move-card">'
+                f'<div class="move-title">'
+                f'{prog["name"].upper()} — {prog["feel"]}</div>'
+                f'{_pills_html}</div>',
+                unsafe_allow_html=True,
+            )
+
+    st.markdown(
+        '<div class="footer-note">Theory tab updates automatically '
+        'when a track is analyzed.</div>',
+        unsafe_allow_html=True,
+    )
 
 
 # ── Footer ──────────────────────────────────────────────────────────────────────
