@@ -8,6 +8,11 @@ import librosa
 import numpy as np
 import pretty_midi
 from openai import OpenAI
+from governance.runtime_resolver import (
+    build_audio_session_state,
+    build_midi_session_state,
+    run_resolver,
+)
 
 load_dotenv()
 
@@ -183,6 +188,15 @@ st.markdown("""
         text-align: center; color: #475569; font-size: 0.72rem; margin-top: 1.5rem;
     }
 
+    /* ── Pi Script audit card ── */
+    .pi-audit-item {
+        display: flex; align-items: flex-start; gap: 0.75rem;
+        padding: 0.45rem 0; border-bottom: 1px solid #0f172a; font-size: 0.85rem;
+    }
+    .pi-audit-item:last-child { border-bottom: none; }
+    .pi-audit-label { color: #a78bfa; font-weight: 600; min-width: 180px; flex-shrink: 0; }
+    .pi-audit-eval  { color: #64748b; font-size: 0.8rem; }
+
     [data-testid="stChatMessage"] {
         background: #0f172a !important;
         border: 1px solid #1e293b !important;
@@ -275,6 +289,12 @@ _NUMERALS = {
 }
 _TRIAD = {'maj': [0, 4, 7], 'min': [0, 3, 7], 'dim': [0, 3, 6]}
 _CHORD_SUFFIX = {'maj': '', 'min': 'm', 'dim': '°'}
+
+# ── Krumhansl-Schmuckler tonal hierarchy profiles ─────────────────────────────
+# Major/minor vectors from Krumhansl & Kessler (1982). Each value is the
+# perceived stability of a pitch class relative to the tonic.
+_KS_MAJOR = np.array([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
+_KS_MINOR = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17])
 
 THEORY_PROGRESSIONS = {
     "Rap": {
@@ -381,6 +401,38 @@ def _build_chords(root: str, mode: str) -> list:
     return chords
 
 
+def _ks_detect_key(y: np.ndarray, sr: int) -> tuple[str, float]:
+    """
+    Krumhansl-Schmuckler key detection via Pearson correlation.
+
+    Uses chroma_cens (energy-normalized, more robust than cqt for K-S) and
+    median aggregation across time (more robust than mean against 808s and
+    transient noise that would skew a mean chroma vector).
+
+    Returns (key_str, confidence) where confidence is the winning Pearson r
+    clamped to [0, 1]. Low values (~< 0.75) indicate an ambiguous or heavily
+    chromatic track where the detected key should be treated as advisory.
+    """
+    chroma = librosa.feature.chroma_cens(y=y, sr=sr)
+    vec = np.median(chroma, axis=1)
+    _NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+    best_r, best_key = -2.0, "C Major"
+    for shift in range(12):
+        shifted = np.roll(vec, -shift)
+        r_maj = float(np.corrcoef(shifted, _KS_MAJOR)[0, 1])
+        r_min = float(np.corrcoef(shifted, _KS_MINOR)[0, 1])
+        if np.isnan(r_maj):
+            r_maj = 0.0
+        if np.isnan(r_min):
+            r_min = 0.0
+        note = _NOTE_NAMES[shift]
+        if r_maj > best_r:
+            best_r, best_key = r_maj, f"{note} Major"
+        if r_min > best_r:
+            best_r, best_key = r_min, f"{note} Minor"
+    return best_key, round(max(0.0, min(1.0, best_r)), 3)
+
+
 def _relative_key(root: str, mode: str) -> str:
     idx = _NOTES.index(_norm(root))
     if mode == 'Major':
@@ -479,20 +531,8 @@ def analyze_audio(file_bytes: bytes, filename: str):
     tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
     bpm = round(float(np.atleast_1d(tempo)[0]), 1)
 
-    # Key detection via chroma
-    chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
-    chroma_mean = chroma.mean(axis=1)
-    note_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-    root_idx = int(np.argmax(chroma_mean))
-    root = note_names[root_idx]
-    major_template = np.array([1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1], dtype=float)
-    minor_template = np.array([1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0], dtype=float)
-    shifted_chroma = np.roll(chroma_mean, -root_idx)
-    shifted_chroma /= (shifted_chroma.sum() + 1e-9)
-    major_score = np.dot(shifted_chroma, major_template / major_template.sum())
-    minor_score = np.dot(shifted_chroma, minor_template / minor_template.sum())
-    mode = "Major" if major_score >= minor_score else "Minor"
-    key = f"{root} {mode}"
+    # Key detection — Krumhansl-Schmuckler (chroma_cens + Pearson correlation)
+    key, key_confidence = _ks_detect_key(y, sr)
 
     # Frequency band energies via STFT
     S = np.abs(librosa.stft(y))
@@ -515,11 +555,12 @@ def analyze_audio(file_bytes: bytes, filename: str):
     centroid_mean = round(float(librosa.feature.spectral_centroid(y=y, sr=sr).mean()), 0)
 
     return bpm, key, {
-        "low_pct": low_pct,
-        "mid_pct": mid_pct,
-        "high_pct": high_pct,
-        "duration": duration,
-        "centroid_hz": centroid_mean,
+        "low_pct":        low_pct,
+        "mid_pct":        mid_pct,
+        "high_pct":       high_pct,
+        "duration":       duration,
+        "centroid_hz":    centroid_mean,
+        "key_confidence": key_confidence,
     }
 
 
@@ -579,10 +620,11 @@ def analyze_midi(file_bytes: bytes):
 
 
 # ── Three-Move advice ───────────────────────────────────────────────────────────
-def get_advice(bpm: float, key: str, client: OpenAI, genre: str = "Rap"):
+def get_advice(bpm: float, key: str, client: OpenAI, genre: str = "Rap", resolver_injection: str = ""):
     system_prompt = (
         f"{genre_context_block(genre)}"
-        "You are The Architect — an elite FL Studio producer and sound designer. "
+        + (f"{resolver_injection}\n\n" if resolver_injection else "")
+        + "You are The Architect — an elite FL Studio producer and sound designer. "
         "You give precise, actionable advice using the Three-Move Rule: every response "
         "covers exactly three areas in order — Drums, Texture, and Mix. "
         "Each move must be tailored to the specific BPM and key provided, and must end "
@@ -752,7 +794,7 @@ def parse_beat_grade(raw: str):
 
 
 # ── MIDI Three-Move advice ──────────────────────────────────────────────────────
-def get_midi_advice(midi_data: dict, client: OpenAI, genre: str = "Rap"):
+def get_midi_advice(midi_data: dict, client: OpenAI, genre: str = "Rap", resolver_injection: str = ""):
     bpm         = midi_data.get("bpm", 120)
     key         = midi_data.get("key") or "Unknown"
     duration    = midi_data.get("duration", 0)
@@ -767,7 +809,8 @@ def get_midi_advice(midi_data: dict, client: OpenAI, genre: str = "Rap"):
     inst_block = "\n".join(inst_lines) if inst_lines else "  - (no instruments detected)"
 
     system_prompt = (
-        "You are The Architect — an elite FL Studio producer and sound designer. "
+        (f"{resolver_injection}\n\n" if resolver_injection else "")
+        + "You are The Architect — an elite FL Studio producer and sound designer. "
         "You give precise, actionable advice using the Three-Move Rule: every response "
         "covers exactly three areas in order — Drums, Texture, and Mix. "
         "Each move must be tailored to the specific BPM, key, and instrument list provided, "
@@ -871,6 +914,62 @@ def freq_bar_html(label, pct, css_class):
         f'<div class="freq-bar-track">'
         f'<div class="freq-bar-fill {css_class}" style="width:{min(pct, 100)}%"></div>'
         f'</div>'
+    )
+
+
+def _progression_to_midi_bytes(chords_seq: list, bpm: float = 120.0) -> bytes:
+    import io
+    pm = pretty_midi.PrettyMIDI(initial_tempo=float(bpm))
+    piano = pretty_midi.Instrument(program=0, name="Chords")
+    seconds_per_beat = 60.0 / float(bpm)
+    bar_dur = 4 * seconds_per_beat
+    for i, chord in enumerate(chords_seq):
+        t_start = i * bar_dur
+        t_end   = t_start + bar_dur * 0.92
+        root_semi = _NOTES.index(chord["root"])
+        for iv in _TRIAD[chord["quality"]]:
+            note = pretty_midi.Note(
+                velocity=88,
+                pitch=60 + root_semi + iv,
+                start=t_start,
+                end=t_end,
+            )
+            piano.notes.append(note)
+    pm.instruments.append(piano)
+    buf = io.BytesIO()
+    pm.write(buf)
+    return buf.getvalue()
+
+
+def _render_pi_audit(resolver_result: dict) -> None:
+    rows_html = ""
+    for r in resolver_result.get("passed", []):
+        rows_html += (
+            f'<div class="pi-audit-item">'
+            f'<span style="color:#34d399;min-width:1.2rem;">✅</span>'
+            f'<span class="pi-audit-label">{r["audit_label"]}</span>'
+            f'<span class="pi-audit-eval">{r["evaluation"]}</span>'
+            f'</div>'
+        )
+    for r in resolver_result.get("violations", []):
+        rows_html += (
+            f'<div class="pi-audit-item">'
+            f'<span style="color:#fbbf24;min-width:1.2rem;">⚠️</span>'
+            f'<span class="pi-audit-label">{r["audit_label"]}</span>'
+            f'<span class="pi-audit-eval">{r["evaluation"]}</span>'
+            f'</div>'
+        )
+    for r in resolver_result.get("suspended", []):
+        rows_html += (
+            f'<div class="pi-audit-item">'
+            f'<span style="color:#334155;min-width:1.2rem;">—</span>'
+            f'<span class="pi-audit-label" style="color:#475569;">{r["audit_label"]}</span>'
+            f'<span class="pi-audit-eval">{r["evaluation"]}</span>'
+            f'</div>'
+        )
+    st.markdown(
+        f'<div class="audit-card" style="margin-top:0;">{rows_html}</div>',
+        unsafe_allow_html=True,
     )
 
 
@@ -993,16 +1092,23 @@ with tab1:
                     st.error(f"Audio analysis failed: {e}")
                     st.stop()
 
+            _audio_state = build_audio_session_state(bpm, key, metrics, selected_genre, uploaded.name)
+            resolver_result = run_resolver(_audio_state)
+
             client = get_openai_client()
             with st.spinner("The Architect is writing your Three Moves…"):
                 try:
-                    advice = get_advice(bpm, key, client, genre=selected_genre)
+                    advice = get_advice(
+                        bpm, key, client, genre=selected_genre,
+                        resolver_injection=resolver_result["injection_text"],
+                    )
                 except Exception:
                     st.session_state.analysis = {
                         "filename": uploaded.name,
                         "genre": selected_genre,
                         "bpm": bpm, "key": key, "metrics": metrics,
                         "advice": None, "beat_grade_raw": "", "ai_error": True,
+                        "resolver_result": resolver_result,
                         "analyzed_at": datetime.datetime.now(),
                     }
                     st.warning("⚠️ The AI service is temporarily unavailable. Click **Re-analyze** to try again.")
@@ -1022,6 +1128,7 @@ with tab1:
                 "metrics": metrics,
                 "advice": advice,
                 "beat_grade_raw": beat_grade_raw,
+                "resolver_result": resolver_result,
                 "analyzed_at": datetime.datetime.now(),
             }
 
@@ -1059,10 +1166,19 @@ with tab1:
             </div>
             """, unsafe_allow_html=True)
         with col2:
+            _kc = metrics.get("key_confidence")
+            if _kc is not None:
+                _kc_color = "#34d399" if _kc >= 0.90 else "#fbbf24" if _kc >= 0.75 else "#f87171"
+                _kc_html = (f'<div style="font-size:0.68rem;color:{_kc_color};'
+                            f'margin-top:0.25rem;font-weight:600;letter-spacing:0.03em;">'
+                            f'{int(_kc * 100)}% K-S confidence</div>')
+            else:
+                _kc_html = ""
             st.markdown(f"""
             <div class="stat-box">
                 <div class="stat-label">Key</div>
                 <div class="stat-value">{key}</div>
+                {_kc_html}
             </div>
             """, unsafe_allow_html=True)
 
@@ -1190,6 +1306,14 @@ with tab1:
         else:
             st.info("Executive Producer Audit could not be generated for this track.")
 
+        _rr = analysis.get("resolver_result")
+        if _rr:
+            _vcount = len(_rr.get("violations", []))
+            _pcount = len(_rr.get("passed", []))
+            _label = f"🔍 Pi Script — Policy Audit ({_pcount} passed" + (f", {_vcount} flagged" if _vcount else "") + ")"
+            with st.expander(_label, expanded=_vcount > 0):
+                _render_pi_audit(_rr)
+
         st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
         with st.expander("Raw GPT responses"):
             st.text("── Three-Move Advice ──\n" + advice)
@@ -1235,10 +1359,16 @@ with tab2:
                     st.error(f"MIDI analysis failed: {e}")
                     st.stop()
 
+            _midi_state = build_midi_session_state(midi_data, selected_genre, midi_file.name)
+            midi_resolver_result = run_resolver(_midi_state)
+
             with st.spinner("The Architect is writing your Three Moves…"):
                 try:
                     client = get_openai_client()
-                    midi_advice = get_midi_advice(midi_data, client, genre=selected_genre)
+                    midi_advice = get_midi_advice(
+                        midi_data, client, genre=selected_genre,
+                        resolver_injection=midi_resolver_result["injection_text"],
+                    )
                 except Exception as e:
                     midi_advice = ""
 
@@ -1247,6 +1377,7 @@ with tab2:
                 "genre": selected_genre,
                 "midi_data": midi_data,
                 "advice": midi_advice,
+                "resolver_result": midi_resolver_result,
                 "analyzed_at": datetime.datetime.now(),
             }
 
@@ -1371,6 +1502,14 @@ with tab2:
                 "three_move_advice_midi.txt",
                 "tab2_moves",
             )
+
+        _mrr = m.get("resolver_result")
+        if _mrr:
+            _mvcount = len(_mrr.get("violations", []))
+            _mpcount = len(_mrr.get("passed", []))
+            _mlabel = f"🔍 Pi Script — Policy Audit ({_mpcount} passed" + (f", {_mvcount} flagged" if _mvcount else "") + ")"
+            with st.expander(_mlabel, expanded=_mvcount > 0):
+                _render_pi_audit(_mrr)
 
     else:
         if st.session_state.midi_analysis is not None:
@@ -1551,6 +1690,13 @@ with tab3:
     _genre_progs = THEORY_PROGRESSIONS.get(selected_genre, THEORY_PROGRESSIONS["Rap"])
     _mode_progs  = _genre_progs.get(t_mode, [])
 
+    # BPM for MIDI export — use analyzed track if available, else 120
+    _export_bpm = 120.0
+    if st.session_state.analysis:
+        _export_bpm = float(st.session_state.analysis.get("bpm", 120.0))
+    elif st.session_state.midi_analysis:
+        _export_bpm = float((st.session_state.midi_analysis.get("midi_data") or {}).get("bpm", 120.0))
+
     if not _mode_progs:
         st.info(f"No progressions defined for {selected_genre} in {t_mode} yet.")
     else:
@@ -1582,6 +1728,14 @@ with tab3:
                 f'{prog["name"].upper()} — {prog["feel"]}</div>'
                 f'{_pills_html}</div>',
                 unsafe_allow_html=True,
+            )
+            _safe_name = prog['name'].lower().replace(' ', '_')
+            st.download_button(
+                label=f"⬇️ Export MIDI  ·  {int(_export_bpm)} BPM",
+                data=_progression_to_midi_bytes(_seq, bpm=_export_bpm),
+                file_name=f"{t_root}_{t_mode}_{_safe_name}.mid",
+                mime="audio/midi",
+                key=f"midi_dl_{_tsig}_{selected_genre}_{_safe_name}",
             )
 
     st.markdown(

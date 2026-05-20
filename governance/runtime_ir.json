@@ -1,0 +1,98 @@
+{
+  "domain": "melody_maestro_runtime",
+  "entities": {
+    "Session": {
+      "bpm":               "float",
+      "genre":             "identifier",
+      "duration":          "float",
+      "low_pct":           "float",
+      "mid_pct":           "float",
+      "high_pct":          "float",
+      "centroid_hz":       "float",
+      "bpm_in_genre_range": "boolean",
+      "has_drums":         "boolean",
+      "melody_note_count": "integer",
+      "upload_type":       "identifier",
+      "session_id":        "identifier"
+    }
+  },
+  "constraints": {
+    "BpmGenreCoherence": {
+      "priority":    "high",
+      "audit_label": "BPM / Genre Coherence",
+      "rule": {
+        "kind":  "equality_rule",
+        "ref":   "Session.bpm_in_genre_range",
+        "value": true
+      },
+      "on_violation": ["warn"],
+      "injection": "RESOLVER: Producer selected {genre} at {bpm} BPM — outside the typical range for this style. Do not infer or change the genre based on BPM. Treat this as an intentional producer choice."
+    },
+    "LowEndBalance": {
+      "priority":    "medium",
+      "audit_label": "Low-End Balance",
+      "rule": {
+        "kind":  "threshold_rule",
+        "ref":   "Session.low_pct",
+        "below": 55.0
+      },
+      "on_violation": ["warn"],
+      "injection": "RESOLVER: Low-end energy is critically high at {low_pct}%. Prioritize kick and bass separation in your drum advice."
+    },
+    "HighEndPresence": {
+      "priority":    "medium",
+      "audit_label": "High-End Presence",
+      "rule": {
+        "kind": "range_rule",
+        "ref":  "Session.high_pct",
+        "lo":   10.0
+      },
+      "on_violation": ["warn"],
+      "injection": "RESOLVER: High-end presence is very thin at {high_pct}%. Explicitly address snare and hi-hat clarity in your advice."
+    },
+    "TrackDuration": {
+      "priority":    "low",
+      "audit_label": "Track Duration",
+      "rule": {
+        "kind": "range_rule",
+        "ref":  "Session.duration",
+        "lo":   90.0
+      },
+      "on_violation": ["warn"],
+      "injection": "RESOLVER: Track is only {duration}s — likely a short loop or incomplete arrangement. Acknowledge this when giving arrangement feedback."
+    },
+    "DrumPresence": {
+      "priority":    "medium",
+      "audit_label": "Drum Track Detected",
+      "rule": {
+        "kind":  "equality_rule",
+        "ref":   "Session.has_drums",
+        "value": true
+      },
+      "on_violation": ["warn"],
+      "injection": "RESOLVER: No drum track found in this MIDI. Omit drum-specific advice. Focus on melodic layering and harmonic texture."
+    },
+    "MelodyPresence": {
+      "priority":    "medium",
+      "audit_label": "Melody / Harmony Content",
+      "rule": {
+        "kind": "range_rule",
+        "ref":  "Session.melody_note_count",
+        "lo":   1
+      },
+      "on_violation": ["warn"],
+      "injection": "RESOLVER: This MIDI contains only drums — no melodic instruments detected. Focus all three moves on groove, rhythm, and drum sound design."
+    }
+  },
+  "maps": {},
+  "enforce": {
+    "Session": [
+      "BpmGenreCoherence",
+      "LowEndBalance",
+      "HighEndPresence",
+      "TrackDuration",
+      "DrumPresence",
+      "MelodyPresence"
+    ]
+  }
+}

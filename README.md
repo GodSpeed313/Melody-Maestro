@@ -10,7 +10,8 @@ An AI-powered music theory and beat analysis tool built for FL Studio producers.
 
 ### Audio Analysis (MP3 / WAV)
 
-- BPM and key detection via librosa
+- BPM and key detection — upgraded to **Krumhansl-Schmuckler** algorithm (`chroma_cens` + Pearson correlation across all 24 keys simultaneously)
+- K-S confidence score displayed alongside the detected key (green ≥ 90%, amber ≥ 75%, red = ambiguous)
 - Frequency band energy split — Low (kick/bass), Mid (body), High (snares/hats)
 - Spectral centroid (brightness indicator)
 
@@ -26,6 +27,14 @@ An AI-powered music theory and beat analysis tool built for FL Studio producers.
 - Arrangement critique tied to actual track duration and BPM
 - Kick/bass balance and high-end balance notes referencing specific FL Studio tools
 
+### Pi Script Runtime Resolver
+
+- 6 genre and sonic health constraints evaluated before every AI call
+- **Corrective injection** — resolver findings prepend the GPT system prompt to prevent BPM/genre mismatches and flag frequency imbalances before advice is generated
+- **Policy audit card** — collapsible pass/fail transparency layer below the EP Audit (auto-expands on violations)
+- Constraints: BPM/Genre Coherence · Low-End Balance · High-End Presence · Track Duration · Drum Presence (MIDI) · Melody Content (MIDI)
+- Shape-disciplined to the [Continuum](https://github.com/GodSpeed313/Continuum) resolver — `equality_rule`, `range_rule`, `threshold_rule` semantics match exactly for future migration
+
 ### MIDI Analysis
 
 - BPM, key signature, instrument list, note counts, pitch range, duration
@@ -36,6 +45,7 @@ An AI-powered music theory and beat analysis tool built for FL Studio producers.
 - Scale notes, diatonic chords, and semitone intervals for any key
 - Two-octave interactive piano keyboard — scale notes lit in purple, chord tones in blue
 - Genre-specific chord progressions with Roman numeral labels
+- **Export MIDI** button on every progression — generates a 4-bar chord clip at the detected BPM, ready to drop into FL Studio
 - Auto-populates from your analyzed track, or set the key manually
 
 ### Genre Support
