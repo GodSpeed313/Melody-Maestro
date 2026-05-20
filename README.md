@@ -1,6 +1,7 @@
 # Melody Maestro — The Architect
 
 ![Python Linting](https://github.com/GodSpeed313/Melody-Maestro/actions/workflows/lint.yml/badge.svg)
+[![Live App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://melody-maestro-a8qfdpv46bjrtbakbd39gh.streamlit.app)
 
 An AI-powered music theory and beat analysis tool built for FL Studio producers. Upload a track or MIDI file and get elite, genre-specific production advice in seconds.
 
