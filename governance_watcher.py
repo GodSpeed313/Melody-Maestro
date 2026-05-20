@@ -38,6 +38,7 @@ def get_commit_files(sha):
 
 
 def migration_exists_in_repo():
+    # Checked only when schema_changed == True (SchemaIntegrity is now conditional).
     url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/prisma/migrations"
     response = requests.get(url, headers=HEADERS, timeout=15)
     if response.status_code == 200:

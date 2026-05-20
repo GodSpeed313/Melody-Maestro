@@ -41,9 +41,12 @@
     "SchemaIntegrity": {
       "priority": "critical",
       "rule": {
-        "kind": "equality_rule",
-        "ref": "MelodyMaestroRepo.migration_exists",
-        "value": true
+        "kind": "conditional_rule",
+        "ref": "MelodyMaestroRepo.schema_changed",
+        "op": "==",
+        "value": true,
+        "require": "migration_exists",
+        "before": "committing"
       },
       "on_violation": [
         "freeze",

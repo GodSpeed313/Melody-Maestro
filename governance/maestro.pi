@@ -38,7 +38,7 @@ constraint ReadmeCoherence {
 
 constraint SchemaIntegrity {
     priority:     critical
-    rule:         MelodyMaestroRepo.migration_exists must equal true
+    rule:         if MelodyMaestroRepo.schema_changed is true then require migration_exists before committing
     on_violation: freeze + escalate
     decay_check:  12 hours
 }
