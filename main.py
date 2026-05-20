@@ -919,7 +919,8 @@ def freq_bar_html(label, pct, css_class):
 
 def _progression_to_midi_bytes(chords_seq: list, bpm: float = 120.0) -> bytes:
     import io
-    pm = pretty_midi.PrettyMIDI(initial_tempo=float(bpm))
+    bpm = max(float(bpm), 20.0)  # pretty_midi divides by tempo — guard against 0
+    pm = pretty_midi.PrettyMIDI(initial_tempo=bpm)
     piano = pretty_midi.Instrument(program=0, name="Chords")
     seconds_per_beat = 60.0 / float(bpm)
     bar_dur = 4 * seconds_per_beat
@@ -1693,9 +1694,10 @@ with tab3:
     # BPM for MIDI export — use analyzed track if available, else 120
     _export_bpm = 120.0
     if st.session_state.analysis:
-        _export_bpm = float(st.session_state.analysis.get("bpm", 120.0))
+        _export_bpm = float(st.session_state.analysis.get("bpm", 120.0) or 120.0)
     elif st.session_state.midi_analysis:
-        _export_bpm = float((st.session_state.midi_analysis.get("midi_data") or {}).get("bpm", 120.0))
+        _export_bpm = float((st.session_state.midi_analysis.get("midi_data") or {}).get("bpm", 120.0) or 120.0)
+    _export_bpm = max(_export_bpm, 20.0)
 
     if not _mode_progs:
         st.info(f"No progressions defined for {selected_genre} in {t_mode} yet.")
