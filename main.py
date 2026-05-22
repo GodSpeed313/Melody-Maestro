@@ -188,6 +188,13 @@ st.markdown("""
         text-align: center; color: #475569; font-size: 0.72rem; margin-top: 1.5rem;
     }
 
+    /* ── Chord tension badges ── */
+    .tension-badge {
+        font-size: 0.58rem; font-weight: 700; text-transform: uppercase;
+        letter-spacing: 0.06em; text-align: center;
+        margin-top: -0.15rem; margin-bottom: 0.3rem;
+    }
+
     /* ── Pi Script audit card ── */
     .pi-audit-item {
         display: flex; align-items: flex-start; gap: 0.75rem;
@@ -289,6 +296,15 @@ _NUMERALS = {
 }
 _TRIAD = {'maj': [0, 4, 7], 'min': [0, 3, 7], 'dim': [0, 3, 6]}
 _CHORD_SUFFIX = {'maj': '', 'min': 'm', 'dim': '°'}
+
+# ── Dissonance / tension tiers per scale degree ────────────────────────────────
+# Tonic function → stable | Pre-dominant / Dominant → tension | Diminished → dissonant
+_CHORD_TENSION = {
+    'Major': ['stable', 'tension', 'stable', 'tension', 'tension', 'stable', 'dissonant'],
+    'Minor': ['stable', 'dissonant', 'stable', 'tension', 'tension', 'stable', 'tension'],
+}
+_TENSION_COLOR = {'stable': '#34d399', 'tension': '#fbbf24', 'dissonant': '#f87171'}
+_TENSION_LABEL = {'stable': 'stable', 'tension': 'tension', 'dissonant': 'dissonant'}
 
 # ── Krumhansl-Schmuckler tonal hierarchy profiles ─────────────────────────────
 # Major/minor vectors from Krumhansl & Kessler (1982). Each value is the
@@ -1663,6 +1679,12 @@ with tab3:
             ):
                 st.session_state.theory_chord_idx = None if is_sel else ci
                 st.rerun()
+            _ct = _CHORD_TENSION[t_mode][ci]
+            st.markdown(
+                f'<div class="tension-badge" style="color:{_TENSION_COLOR[_ct]};">'
+                f'{_ct}</div>',
+                unsafe_allow_html=True,
+            )
 
     # Selected chord detail
     if sel_idx is not None and 0 <= sel_idx < 7:
@@ -1704,6 +1726,9 @@ with tab3:
     else:
         for prog in _mode_progs:
             _seq = [t_chords[d] for d in prog['degrees'] if d < len(t_chords)]
+            _prog_tensions = [_CHORD_TENSION[t_mode][d] for d in prog['degrees'] if d < 7]
+            _prog_tier = 'dissonant' if 'dissonant' in _prog_tensions else 'tension' if 'tension' in _prog_tensions else 'stable'
+            _prog_tc = _TENSION_COLOR[_prog_tier]
             _pills = []
             for pi, pc in enumerate(_seq):
                 _pills.append(
@@ -1726,8 +1751,10 @@ with tab3:
             )
             st.markdown(
                 f'<div class="move-card">'
-                f'<div class="move-title">'
-                f'{prog["name"].upper()} — {prog["feel"]}</div>'
+                f'<div class="move-title">{prog["name"].upper()} — {prog["feel"]}'
+                f'<span style="margin-left:0.6rem;font-size:0.6rem;font-weight:700;'
+                f'text-transform:uppercase;letter-spacing:0.06em;color:{_prog_tc};">'
+                f'· {_TENSION_LABEL[_prog_tier]}</span></div>'
                 f'{_pills_html}</div>',
                 unsafe_allow_html=True,
             )
@@ -1750,7 +1777,7 @@ with tab3:
 # ── Footer ──────────────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="footer-note">
-    The Architect · Powered by librosa + GPT-4o · Three-Move Rule · Executive Producer Audit
+    The Architect · Powered by librosa + Groq (llama-3.3-70b) · Three-Move Rule · Executive Producer Audit
 </div>
 """, unsafe_allow_html=True)
 

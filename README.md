@@ -45,6 +45,7 @@ An AI-powered music theory and beat analysis tool built for FL Studio producers.
 
 - Scale notes, diatonic chords, and semitone intervals for any key
 - Two-octave interactive piano keyboard — scale notes lit in purple, chord tones in blue
+- **Dissonance detector** — every diatonic chord labeled stable / tension / dissonant based on harmonic function; every genre progression labeled by its peak tension tier
 - Genre-specific chord progressions with Roman numeral labels
 - **Export MIDI** button on every progression — generates a 4-bar chord clip at the detected BPM, ready to drop into FL Studio
 - Auto-populates from your analyzed track, or set the key manually
