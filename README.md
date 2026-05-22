@@ -27,6 +27,7 @@ An AI-powered music theory and beat analysis tool built for FL Studio producers.
 - **Vibe Score** (1–10) with genre-fit reasoning
 - Arrangement critique tied to actual track duration and BPM
 - Kick/bass balance and high-end balance notes referencing specific FL Studio tools
+- **Frequency clash detector** — 8-band spectral analysis flags congested zones (e.g. "200–400Hz: bass warmth / kick punch"); shows clean confirmation when no buildup detected
 
 ### Pi Script Runtime Resolver
 

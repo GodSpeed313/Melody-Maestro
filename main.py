@@ -306,6 +306,19 @@ _CHORD_TENSION = {
 _TENSION_COLOR = {'stable': '#34d399', 'tension': '#fbbf24', 'dissonant': '#f87171'}
 _TENSION_LABEL = {'stable': 'stable', 'tension': 'tension', 'dissonant': 'dissonant'}
 
+# ── Frequency clash detection bands ──────────────────────────────────────────
+# (lo_hz, hi_hz, band_name, range_label, instrument_hint)
+_FREQ_BANDS = [
+    (20,    60,    "Sub-bass",   "20–60Hz",    "808 sub / sub layer"),
+    (60,    200,   "Bass",       "60–200Hz",   "kick body / bass notes"),
+    (200,   400,   "Upper bass", "200–400Hz",  "bass warmth / kick punch"),
+    (400,   800,   "Low-mid",    "400–800Hz",  "body / classic mud zone"),
+    (800,   2000,  "Mid",        "800Hz–2kHz", "vocal body / synth presence"),
+    (2000,  4000,  "Upper-mid",  "2–4kHz",     "attack / snap / harshness zone"),
+    (4000,  8000,  "High-mid",   "4–8kHz",     "snare crack / hi-hat body"),
+    (8000,  20000, "Air",        "8–20kHz",    "air / shimmer"),
+]
+
 # ── Krumhansl-Schmuckler tonal hierarchy profiles ─────────────────────────────
 # Major/minor vectors from Krumhansl & Kessler (1982). Each value is the
 # perceived stability of a pitch class relative to the tonic.
@@ -415,6 +428,43 @@ def _build_chords(root: str, mode: str) -> list:
             'degree': i,
         })
     return chords
+
+
+def detect_frequency_clashes(y: np.ndarray, sr: int) -> list:
+    """
+    Identify spectrally congested frequency bands.
+
+    Computes mean energy per band, smooths the envelope with a 3-band
+    window, then flags bands whose energy exceeds 1.45x their smoothed
+    neighborhood AND clears a minimum absolute energy floor. Returns
+    up to 3 flagged bands sorted by congestion severity.
+    """
+    S = np.abs(librosa.stft(y))
+    freqs = librosa.fft_frequencies(sr=sr)
+
+    band_energies = []
+    for lo, hi, *_ in _FREQ_BANDS:
+        mask = (freqs >= lo) & (freqs < hi)
+        e = float(S[mask].mean()) if mask.sum() > 0 else 0.0
+        band_energies.append(e)
+
+    arr = np.array(band_energies)
+    smoothed = np.array([arr[max(0, i - 1):i + 2].mean() for i in range(len(arr))])
+    ratio = arr / (smoothed + 1e-9)
+    mean_e = arr.mean()
+
+    clashes = []
+    for i, (lo, hi, name, range_label, hint) in enumerate(_FREQ_BANDS):
+        if ratio[i] > 1.45 and arr[i] > mean_e * 0.5:
+            clashes.append({
+                "band":  name,
+                "range": range_label,
+                "hint":  hint,
+                "ratio": round(float(ratio[i]), 2),
+            })
+
+    clashes.sort(key=lambda x: x["ratio"], reverse=True)
+    return clashes[:3]
 
 
 def _ks_detect_key(y: np.ndarray, sr: int) -> tuple[str, float]:
@@ -564,6 +614,9 @@ def analyze_audio(file_bytes: bytes, filename: str):
     mid_pct  = round(mid_e  / total_e * 100, 1)
     high_pct = round(high_e / total_e * 100, 1)
 
+    # Frequency clash detection (reuses existing STFT)
+    clashes = detect_frequency_clashes(y, sr)
+
     # Track duration in seconds
     duration = round(float(len(y) / sr), 1)
 
@@ -577,6 +630,7 @@ def analyze_audio(file_bytes: bytes, filename: str):
         "duration":       duration,
         "centroid_hz":    centroid_mean,
         "key_confidence": key_confidence,
+        "clashes":        clashes,
     }
 
 
@@ -1288,6 +1342,38 @@ with tab1:
                         + '</div></div>'
                     )
                     st.markdown(bars_html, unsafe_allow_html=True)
+
+                _clashes = metrics.get("clashes", [])
+                if _clashes:
+                    _clash_rows = ""
+                    for _cl in _clashes:
+                        _clash_rows += (
+                            f'<div style="display:flex;justify-content:space-between;'
+                            f'align-items:baseline;padding:0.3rem 0;'
+                            f'border-bottom:1px solid #0f172a;">'
+                            f'<span style="color:#f87171;font-size:0.78rem;font-weight:700;">'
+                            f'{_cl["band"]}</span>'
+                            f'<span style="color:#64748b;font-size:0.72rem;">'
+                            f'{_cl["range"]}</span>'
+                            f'</div>'
+                            f'<div style="font-size:0.7rem;color:#475569;'
+                            f'padding-bottom:0.3rem;">{_cl["hint"]}</div>'
+                        )
+                    st.markdown(
+                        f'<div class="audit-card" style="margin-top:0;">'
+                        f'<div class="audit-card-title sonic" style="color:#f87171;">'
+                        f'⚠ Congested Bands</div>{_clash_rows}</div>',
+                        unsafe_allow_html=True,
+                    )
+                elif metrics:
+                    st.markdown(
+                        '<div class="audit-card" style="margin-top:0;">'
+                        '<div class="audit-card-title sonic" style="color:#34d399;">'
+                        '✓ No Congested Bands</div>'
+                        '<div style="font-size:0.78rem;color:#64748b;">Spectral energy '
+                        'is distributed without major buildup zones.</div></div>',
+                        unsafe_allow_html=True,
+                    )
 
             with right_col:
                 if grade["arrangement"]:
