@@ -1,11 +1,15 @@
 """
 Pi Script runtime resolver for Melody Maestro — Path B wrapper.
 
-Evaluates genre coherence and sonic health policies against a Session entity
+Evaluates session coherence and genre floor policies against a Session entity
 built from audio/MIDI analysis results. Mirrors Continuum resolver rule
-semantics (equality_rule, range_rule, threshold_rule) without the import
-dependency. Designed as a drop-in replacement once Continuum ships as an
-installable package.
+semantics (equality_rule, range_rule, threshold_rule, context_rule) without
+the import dependency. Designed as a drop-in replacement once Continuum ships
+as an installable package.
+
+Two IR files, one resolver:
+  - runtime_ir.json   — session coherence (BPM range, frequency balance, etc.)
+  - genre_rules.json  — genre floor policies (context_rule per genre)
 
 Output shapes two things:
   1. injection_text  — prepended to GPT system prompt before advice generation
@@ -19,15 +23,15 @@ import os
 from typing import Any
 
 _ROOT = os.path.dirname(os.path.abspath(__file__))
-_RUNTIME_IR_PATH = os.path.join(_ROOT, "runtime_ir.json")
+_RUNTIME_IR_PATH  = os.path.join(_ROOT, "runtime_ir.json")
+_GENRE_IR_PATH    = os.path.join(_ROOT, "genre_rules.json")
 
-# Cached at module level — file doesn't change between requests.
-_IR: dict | None = None
+# Cached at module level — files don't change between requests.
+_IR:       dict | None = None
+_GENRE_IR: dict | None = None
 
 
 # ── Genre BPM floors and ceilings ─────────────────────────────────────────────
-# Wide enough to avoid false positives on stylistic choices; tight enough to
-# catch genuine genre/BPM mismatches that confuse the AI's genre inference.
 _GENRE_BPM_RANGES: dict[str, tuple[float, float]] = {
     "Rap":                      (120.0, 185.0),
     "Hip-Hop":                  (75.0,  120.0),
@@ -38,7 +42,7 @@ _GENRE_BPM_RANGES: dict[str, tuple[float, float]] = {
 }
 
 
-# ── IR loader ─────────────────────────────────────────────────────────────────
+# ── IR loaders ────────────────────────────────────────────────────────────────
 
 def _get_ir() -> dict:
     global _IR
@@ -46,6 +50,14 @@ def _get_ir() -> dict:
         with open(_RUNTIME_IR_PATH, encoding="utf-8") as f:
             _IR = json.load(f)
     return _IR
+
+
+def _get_genre_ir() -> dict:
+    global _GENRE_IR
+    if _GENRE_IR is None:
+        with open(_GENRE_IR_PATH, encoding="utf-8") as f:
+            _GENRE_IR = json.load(f)
+    return _GENRE_IR
 
 
 # ── BPM range helper ──────────────────────────────────────────────────────────
@@ -152,51 +164,91 @@ def _render_injection(template: str, entity_state: dict) -> str:
 
 # ── Main resolver ─────────────────────────────────────────────────────────────
 
-def run_resolver(entity_state: dict) -> dict:
+def run_resolver(entity_state: dict, ir: dict | None = None) -> dict:
     """
     Evaluate all Session constraints against the provided entity state.
 
+    Pass a specific IR dict to use a different policy file (e.g. genre_rules).
+    If ir is None, uses runtime_ir.json (session coherence policies).
+
     Returns:
         {
-            "violations":    list[dict],   # constraints that fired
+            "violations":    list[dict],   # constraints that fired as violations
             "passed":        list[dict],   # constraints satisfied
-            "suspended":     list[dict],   # field missing for this upload type
-            "injection_text": str,         # combined RESOLVER lines for GPT
+            "active":        list[dict],   # context_rule floors that fired
+            "suspended":     list[dict],   # field missing or context not met
+            "injection_text": str,         # combined injection for GPT prompt
             "has_violations": bool,
         }
     """
-    ir = _get_ir()
-    constraints_ir = ir.get("constraints", {})
-    enforce_list = ir.get("enforce", {}).get("Session", [])
+    if ir is None:
+        ir = _get_ir()
 
-    violations: list[dict] = []
-    passed: list[dict] = []
-    suspended: list[dict] = []
-    injection_parts: list[str] = []
+    constraints_ir = ir.get("constraints", {})
+    enforce_list   = ir.get("enforce", {}).get("Session", [])
+
+    violations:      list[dict] = []
+    passed:          list[dict] = []
+    active:          list[dict] = []
+    suspended:       list[dict] = []
+    injection_parts: list[str]  = []
 
     for cname in enforce_list:
         c_ir = constraints_ir.get(cname)
         if not c_ir:
             suspended.append({
-                "name": cname,
+                "name":       cname,
                 "audit_label": cname,
                 "evaluation": "constraint definition not found",
             })
             continue
 
-        rule = c_ir.get("rule", {})
-        rule_kind = rule.get("kind", "")
-        audit_label = c_ir.get("audit_label", cname)
+        rule               = c_ir.get("rule", {})
+        rule_kind          = rule.get("kind", "")
+        audit_label        = c_ir.get("audit_label", cname)
         injection_template = c_ir.get("injection", "")
 
-        ref = rule.get("ref", "")
+        # ── Context filtering ─────────────────────────────────────────────────
+        # If a context block is present, all k/v pairs must match entity state.
+        # Non-matching constraints are suspended — not violated, not passed.
+        context = c_ir.get("context", {})
+        if context:
+            context_met = all(
+                entity_state.get(k) == v for k, v in context.items()
+            )
+            if not context_met:
+                ctx_desc = ", ".join(f"{k}={v!r}" for k, v in context.items())
+                suspended.append({
+                    "name":       cname,
+                    "audit_label": audit_label,
+                    "evaluation": f"context not met ({ctx_desc})",
+                })
+                continue
+
+        # ── context_rule: floor enforcer ──────────────────────────────────────
+        # Fires injection whenever context matches. Not a violation — it's a
+        # declarative genre floor. Always reports "active", never "violated".
+        if rule_kind == "context_rule":
+            injection = _render_injection(injection_template, entity_state)
+            active.append({
+                "name":        cname,
+                "audit_label": audit_label,
+                "evaluation":  "genre floor active — injection applied",
+                "rule_kind":   rule_kind,
+            })
+            if injection:
+                injection_parts.append(injection)
+            continue
+
+        # ── Standard rule evaluation ──────────────────────────────────────────
+        ref   = rule.get("ref", "")
         field = ref.split(".", 1)[1] if "." in ref else ref
 
         if field and field not in entity_state:
             suspended.append({
-                "name": cname,
+                "name":        cname,
                 "audit_label": audit_label,
-                "evaluation": f"field '{field}' not present for this upload type",
+                "evaluation":  f"field '{field}' not present for this upload type",
             })
             continue
 
@@ -212,31 +264,38 @@ def run_resolver(entity_state: dict) -> dict:
             violated, evaluation = _eval_threshold(field, value, below=rule["below"])
         else:
             suspended.append({
-                "name": cname,
+                "name":        cname,
                 "audit_label": audit_label,
-                "evaluation": f"unknown rule kind '{rule_kind}'",
+                "evaluation":  f"unknown rule kind '{rule_kind}'",
             })
             continue
 
         result = {
-            "name":       cname,
+            "name":        cname,
             "audit_label": audit_label,
-            "evaluation": evaluation,
-            "rule_kind":  rule_kind,
+            "evaluation":  evaluation,
+            "rule_kind":   rule_kind,
         }
 
         if violated:
             injection = _render_injection(injection_template, entity_state)
             result["injection"] = injection
             violations.append(result)
-            injection_parts.append(injection)
+            if injection:
+                injection_parts.append(injection)
         else:
             passed.append(result)
 
     return {
         "violations":     violations,
         "passed":         passed,
+        "active":         active,
         "suspended":      suspended,
         "injection_text": "\n".join(injection_parts),
         "has_violations": len(violations) > 0,
     }
+
+
+def run_genre_resolver(entity_state: dict) -> dict:
+    """Evaluate genre floor policies from genre_rules.json."""
+    return run_resolver(entity_state, ir=_get_genre_ir())

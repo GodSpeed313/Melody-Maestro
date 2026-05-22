@@ -12,6 +12,7 @@ from governance.runtime_resolver import (
     build_audio_session_state,
     build_midi_session_state,
     run_resolver,
+    run_genre_resolver,
 )
 
 load_dotenv()
@@ -1012,10 +1013,40 @@ def _progression_to_midi_bytes(chords_seq: list, bpm: float = 120.0) -> bytes:
     return buf.getvalue()
 
 
-def _render_pi_audit(resolver_result: dict) -> None:
+def _render_pi_audit(resolver_result: dict, genre_result: dict | None = None) -> None:
     rows_html = ""
+
+    # Genre floor policies (context_rule — active when genre matches)
+    if genre_result:
+        for r in genre_result.get("active", []):
+            rows_html += (
+                f'<div class="pi-audit-item">'
+                f'<span style="color:#a78bfa;min-width:1.2rem;">◆</span>'
+                f'<span class="pi-audit-label">{r["audit_label"]}</span>'
+                f'<span class="pi-audit-eval">{r["evaluation"]}</span>'
+                f'</div>'
+            )
+        for r in genre_result.get("suspended", []):
+            rows_html += (
+                f'<div class="pi-audit-item">'
+                f'<span style="color:#1e293b;min-width:1.2rem;">—</span>'
+                f'<span class="pi-audit-label" style="color:#334155;">{r["audit_label"]}</span>'
+                f'<span class="pi-audit-eval" style="color:#334155;">{r["evaluation"]}</span>'
+                f'</div>'
+            )
+        if rows_html:
+            rows_html = (
+                f'<div style="font-size:0.62rem;color:#64748b;font-weight:700;'
+                f'text-transform:uppercase;letter-spacing:0.07em;'
+                f'padding:0.3rem 0 0.15rem 0;">Genre Floor</div>'
+                + rows_html
+                + f'<div style="height:1px;background:#1e293b;margin:0.4rem 0;"></div>'
+            )
+
+    # Session coherence policies (violation/pass/suspend)
+    session_rows = ""
     for r in resolver_result.get("passed", []):
-        rows_html += (
+        session_rows += (
             f'<div class="pi-audit-item">'
             f'<span style="color:#34d399;min-width:1.2rem;">✅</span>'
             f'<span class="pi-audit-label">{r["audit_label"]}</span>'
@@ -1023,7 +1054,7 @@ def _render_pi_audit(resolver_result: dict) -> None:
             f'</div>'
         )
     for r in resolver_result.get("violations", []):
-        rows_html += (
+        session_rows += (
             f'<div class="pi-audit-item">'
             f'<span style="color:#fbbf24;min-width:1.2rem;">⚠️</span>'
             f'<span class="pi-audit-label">{r["audit_label"]}</span>'
@@ -1031,13 +1062,21 @@ def _render_pi_audit(resolver_result: dict) -> None:
             f'</div>'
         )
     for r in resolver_result.get("suspended", []):
-        rows_html += (
+        session_rows += (
             f'<div class="pi-audit-item">'
             f'<span style="color:#334155;min-width:1.2rem;">—</span>'
             f'<span class="pi-audit-label" style="color:#475569;">{r["audit_label"]}</span>'
             f'<span class="pi-audit-eval">{r["evaluation"]}</span>'
             f'</div>'
         )
+    if session_rows:
+        rows_html += (
+            f'<div style="font-size:0.62rem;color:#64748b;font-weight:700;'
+            f'text-transform:uppercase;letter-spacing:0.07em;'
+            f'padding:0.3rem 0 0.15rem 0;">Session Coherence</div>'
+            + session_rows
+        )
+
     st.markdown(
         f'<div class="audit-card" style="margin-top:0;">{rows_html}</div>',
         unsafe_allow_html=True,
@@ -1165,13 +1204,18 @@ with tab1:
 
             _audio_state = build_audio_session_state(bpm, key, metrics, selected_genre, uploaded.name)
             resolver_result = run_resolver(_audio_state)
+            genre_result    = run_genre_resolver(_audio_state)
+            _combined_injection = "\n\n".join(filter(None, [
+                genre_result["injection_text"],
+                resolver_result["injection_text"],
+            ]))
 
             client = get_openai_client()
             with st.spinner("The Architect is writing your Three Moves…"):
                 try:
                     advice = get_advice(
                         bpm, key, client, genre=selected_genre,
-                        resolver_injection=resolver_result["injection_text"],
+                        resolver_injection=_combined_injection,
                     )
                 except Exception:
                     st.session_state.analysis = {
@@ -1180,6 +1224,7 @@ with tab1:
                         "bpm": bpm, "key": key, "metrics": metrics,
                         "advice": None, "beat_grade_raw": "", "ai_error": True,
                         "resolver_result": resolver_result,
+                        "genre_result":    genre_result,
                         "analyzed_at": datetime.datetime.now(),
                     }
                     st.warning("⚠️ The AI service is temporarily unavailable. Click **Re-analyze** to try again.")
@@ -1192,15 +1237,16 @@ with tab1:
                     beat_grade_raw = ""
 
             st.session_state.analysis = {
-                "filename": uploaded.name,
-                "genre": selected_genre,
-                "bpm": bpm,
-                "key": key,
-                "metrics": metrics,
-                "advice": advice,
-                "beat_grade_raw": beat_grade_raw,
+                "filename":        uploaded.name,
+                "genre":           selected_genre,
+                "bpm":             bpm,
+                "key":             key,
+                "metrics":         metrics,
+                "advice":          advice,
+                "beat_grade_raw":  beat_grade_raw,
                 "resolver_result": resolver_result,
-                "analyzed_at": datetime.datetime.now(),
+                "genre_result":    genre_result,
+                "analyzed_at":     datetime.datetime.now(),
             }
 
         analysis = st.session_state.analysis
@@ -1410,12 +1456,14 @@ with tab1:
             st.info("Executive Producer Audit could not be generated for this track.")
 
         _rr = analysis.get("resolver_result")
+        _gr = analysis.get("genre_result")
         if _rr:
-            _vcount = len(_rr.get("violations", []))
-            _pcount = len(_rr.get("passed", []))
-            _label = f"🔍 Pi Script — Policy Audit ({_pcount} passed" + (f", {_vcount} flagged" if _vcount else "") + ")"
+            _vcount  = len(_rr.get("violations", []))
+            _pcount  = len(_rr.get("passed", []))
+            _acount  = len((_gr or {}).get("active", []))
+            _label   = f"🔍 Pi Script — Policy Audit ({_acount} genre floor active, {_pcount} passed" + (f", {_vcount} flagged" if _vcount else "") + ")"
             with st.expander(_label, expanded=_vcount > 0):
-                _render_pi_audit(_rr)
+                _render_pi_audit(_rr, genre_result=_gr)
 
         st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
         with st.expander("Raw GPT responses"):
@@ -1464,24 +1512,30 @@ with tab2:
 
             _midi_state = build_midi_session_state(midi_data, selected_genre, midi_file.name)
             midi_resolver_result = run_resolver(_midi_state)
+            midi_genre_result    = run_genre_resolver(_midi_state)
+            _midi_combined_injection = "\n\n".join(filter(None, [
+                midi_genre_result["injection_text"],
+                midi_resolver_result["injection_text"],
+            ]))
 
             with st.spinner("The Architect is writing your Three Moves…"):
                 try:
                     client = get_openai_client()
                     midi_advice = get_midi_advice(
                         midi_data, client, genre=selected_genre,
-                        resolver_injection=midi_resolver_result["injection_text"],
+                        resolver_injection=_midi_combined_injection,
                     )
                 except Exception as e:
                     midi_advice = ""
 
             st.session_state.midi_analysis = {
-                "filename": midi_file.name,
-                "genre": selected_genre,
-                "midi_data": midi_data,
-                "advice": midi_advice,
+                "filename":        midi_file.name,
+                "genre":           selected_genre,
+                "midi_data":       midi_data,
+                "advice":          midi_advice,
                 "resolver_result": midi_resolver_result,
-                "analyzed_at": datetime.datetime.now(),
+                "genre_result":    midi_genre_result,
+                "analyzed_at":     datetime.datetime.now(),
             }
 
         m      = st.session_state.midi_analysis
@@ -1607,12 +1661,14 @@ with tab2:
             )
 
         _mrr = m.get("resolver_result")
+        _mgr = m.get("genre_result")
         if _mrr:
             _mvcount = len(_mrr.get("violations", []))
             _mpcount = len(_mrr.get("passed", []))
-            _mlabel = f"🔍 Pi Script — Policy Audit ({_mpcount} passed" + (f", {_mvcount} flagged" if _mvcount else "") + ")"
+            _macount = len((_mgr or {}).get("active", []))
+            _mlabel  = f"🔍 Pi Script — Policy Audit ({_macount} genre floor active, {_mpcount} passed" + (f", {_mvcount} flagged" if _mvcount else "") + ")"
             with st.expander(_mlabel, expanded=_mvcount > 0):
-                _render_pi_audit(_mrr)
+                _render_pi_audit(_mrr, genre_result=_mgr)
 
     else:
         if st.session_state.midi_analysis is not None:

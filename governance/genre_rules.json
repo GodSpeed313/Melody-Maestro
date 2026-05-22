@@ -1,0 +1,71 @@
+{
+  "domain": "melody_maestro_genre_rules",
+  "entities": {
+    "Session": {
+      "genre": "identifier",
+      "upload_type":    "identifier",
+      "session_id":     "identifier"
+    }
+  },
+  "constraints": {
+    "RapFloor": {
+      "priority":    "high",
+      "audit_label": "Rap Genre Floor",
+      "context":     { "genre": "Rap" },
+      "rule":        { "kind": "context_rule" },
+      "on_violation": [],
+      "injection": "GENRE FLOOR — RAP: Drums: trap patterns, 808 sub kicks, rolling hi-hats, snappy snares. Texture: dark synth pads, vocal chops, ominous melodies, heavy bass lines. Mix: punchy low-end, clear vocal space, controlled 808 sub. FORBIDDEN TERMS — never use: house, club, dance floor, EDM, pop crossover, four-on-the-floor. Do NOT infer or change genre based on BPM."
+    },
+    "HipHopFloor": {
+      "priority":    "high",
+      "audit_label": "Hip-Hop Genre Floor",
+      "context":     { "genre": "Hip-Hop" },
+      "rule":        { "kind": "context_rule" },
+      "on_violation": [],
+      "injection": "GENRE FLOOR — HIP-HOP: Drums: boom bap or trap patterns, weighty kicks, crisp snares, swinging hi-hats. Texture: sampled loops, vocal layers, warm pads, melodic hooks. Mix: balanced low-end, clear mid presence, punchy transients. FORBIDDEN TERMS — never use: house, club, dance floor, EDM, pop crossover. Do NOT infer or change genre based on BPM."
+    },
+    "RnBFloor": {
+      "priority":    "high",
+      "audit_label": "R&B Genre Floor",
+      "context":     { "genre": "R&B" },
+      "rule":        { "kind": "context_rule" },
+      "on_violation": [],
+      "injection": "GENRE FLOOR — R&B: Drums: laid-back groove, soft kick, snappy snare or clap, subtle hi-hats. Texture: lush pads, warm Rhodes, smooth synth leads, rich chord stacks. Mix: warm vocal-forward mix, smooth low-end, polished high-end. FORBIDDEN TERMS — never use: trap, 808 sub, street energy, hard-hitting, EDM, house. Do NOT infer or change genre based on BPM."
+    },
+    "OldSchoolFloor": {
+      "priority":    "high",
+      "audit_label": "Old School R&B / Hip-Hop Genre Floor",
+      "context":     { "genre": "Old School R&B / Hip-Hop" },
+      "rule":        { "kind": "context_rule" },
+      "on_violation": [],
+      "injection": "GENRE FLOOR — OLD SCHOOL R&B / HIP-HOP: Drums: boom bap breaks, dusty snares, swinging hi-hats, MPC-chopped samples. Texture: soul samples, warm Rhodes, vinyl texture, classic loop-based arrangements. Mix: warm slightly lo-fi character, punchy but not over-compressed. FORBIDDEN TERMS — never use: trap, 808, modern trap, EDM, house, club, dance floor. Do NOT infer or change genre based on BPM."
+    },
+    "PopFloor": {
+      "priority":    "high",
+      "audit_label": "Pop Genre Floor",
+      "context":     { "genre": "Pop" },
+      "rule":        { "kind": "context_rule" },
+      "on_violation": [],
+      "injection": "GENRE FLOOR — POP: Drums: punchy kick, bright snare, driving hi-hats, clean programming. Texture: bright synth leads, layered vocals, wide stereo pads, sparkly high-end. Mix: loud bright wide mix, modern loudness standard, hook-forward arrangement. Do NOT infer or change genre based on BPM."
+    },
+    "AltRockFloor": {
+      "priority":    "high",
+      "audit_label": "Alternative Rock Genre Floor",
+      "context":     { "genre": "Alternative Rock" },
+      "rule":        { "kind": "context_rule" },
+      "on_violation": [],
+      "injection": "GENRE FLOOR — ALTERNATIVE ROCK: Drums: live-feeling kick and snare, driving hi-hats, crash cymbals, natural room sound. Texture: distorted guitars, overdriven bass, raw synth layers, layered guitars. Mix: raw wide dynamic mix, natural transients, not over-compressed. FORBIDDEN TERMS — never use: 808, trap, EDM, house, club. Do NOT infer or change genre based on BPM."
+    }
+  },
+  "maps": {},
+  "enforce": {
+    "Session": [
+      "RapFloor",
+      "HipHopFloor",
+      "RnBFloor",
+      "OldSchoolFloor",
+      "PopFloor",
+      "AltRockFloor"
+    ]
+  }
+}

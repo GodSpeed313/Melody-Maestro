@@ -35,7 +35,9 @@ An AI-powered music theory and beat analysis tool built for FL Studio producers.
 - **Corrective injection** — resolver findings prepend the GPT system prompt to prevent BPM/genre mismatches and flag frequency imbalances before advice is generated
 - **Policy audit card** — collapsible pass/fail transparency layer below the EP Audit (auto-expands on violations)
 - Constraints: BPM/Genre Coherence · Low-End Balance · High-End Presence · Track Duration · Drum Presence (MIDI) · Melody Content (MIDI)
-- Shape-disciplined to the [Continuum](https://github.com/GodSpeed313/Continuum) resolver — `equality_rule`, `range_rule`, `threshold_rule` semantics match exactly for future migration
+- **Genre Rules Engine** — 6 declarative genre floor policies in `governance/genre_rules.json`; context-scoped `context_rule` fires pre-generation injection enforcing sonic refs, forbidden terms, and style boundaries per genre
+- Audit card shows Genre Floor section (◆ active / — skipped) + Session Coherence section (✅ / ⚠️ / —)
+- Shape-disciplined to the [Continuum](https://github.com/GodSpeed313/Continuum) resolver — `equality_rule`, `range_rule`, `threshold_rule`, `context_rule` semantics match exactly for future migration
 
 ### MIDI Analysis
 
