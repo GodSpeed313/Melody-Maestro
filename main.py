@@ -224,6 +224,8 @@ if "midi_analysis" not in st.session_state:
     st.session_state.midi_analysis = None
 if "theory_chord_idx" not in st.session_state:
     st.session_state.theory_chord_idx = None
+if "style_history" not in st.session_state:
+    st.session_state.style_history = []
 
 
 # ── Genre context dictionary ────────────────────────────────────────────────────
@@ -969,6 +971,96 @@ def chat_with_architect(user_message: str, client: OpenAI):
     return response.choices[0].message.content.strip()
 
 
+# ── Style tracker helpers ────────────────────────────────────────────────────────
+
+def _style_entry_audio(bpm, key, metrics, genre):
+    root, mode = _parse_key(key)
+    conf = metrics.get("key_confidence")
+    clash_bands = [c["band"] for c in metrics.get("clashes", [])]
+    return {
+        "upload_type":   "audio",
+        "bpm":           bpm,
+        "key_root":      root,
+        "key_mode":      mode,
+        "genre":         genre,
+        "ks_confidence": conf,
+        "clash_bands":   clash_bands,
+    }
+
+
+def _style_entry_midi(midi_data, genre):
+    key_str = (midi_data.get("key") or "")
+    root, mode = _parse_key(key_str) if key_str else ("?", "?")
+    return {
+        "upload_type":   "midi",
+        "bpm":           float(midi_data.get("bpm", 0)),
+        "key_root":      root,
+        "key_mode":      mode,
+        "genre":         genre,
+        "ks_confidence": None,
+        "clash_bands":   [],
+    }
+
+
+def _render_style_profile(history: list) -> None:
+    if len(history) < 2:
+        return
+
+    bpms   = [e["bpm"] for e in history if e["bpm"] > 0]
+    roots  = [e["key_root"] for e in history if e["key_root"] not in ("?", "")]
+    modes  = [e["key_mode"] for e in history if e["key_mode"] not in ("?", "")]
+    genres = [e["genre"] for e in history]
+    confs  = [e["ks_confidence"] for e in history if e["ks_confidence"] is not None]
+    all_clashes = [b for e in history for b in e["clash_bands"]]
+
+    avg_bpm  = round(sum(bpms) / len(bpms), 1) if bpms else None
+    bpm_min  = round(min(bpms), 1) if bpms else None
+    bpm_max  = round(max(bpms), 1) if bpms else None
+    dom_mode = max(set(modes), key=modes.count) if modes else None
+    dom_root = max(set(roots), key=roots.count) if roots else None
+    dom_genre = max(set(genres), key=genres.count) if genres else None
+    avg_conf = round(sum(confs) / len(confs) * 100) if confs else None
+    recurring = [b for b in set(all_clashes) if all_clashes.count(b) >= 2]
+
+    def _row(label, value, color="#94a3b8"):
+        return (
+            f'<div style="display:flex;justify-content:space-between;'
+            f'align-items:baseline;padding:0.25rem 0;'
+            f'border-bottom:1px solid #0f172a;">'
+            f'<span style="font-size:0.7rem;color:#64748b;text-transform:uppercase;'
+            f'letter-spacing:0.05em;">{label}</span>'
+            f'<span style="font-size:0.8rem;font-weight:600;color:{color};">{value}</span>'
+            f'</div>'
+        )
+
+    rows = ""
+    if avg_bpm:
+        bpm_label = f"{avg_bpm} avg" + (f" · {bpm_min}–{bpm_max}" if bpm_min != bpm_max else "")
+        rows += _row("BPM", bpm_label)
+    if dom_mode and dom_root:
+        rows += _row("Key tendency", f"{dom_root} {dom_mode}", "#a78bfa")
+    if dom_genre:
+        rows += _row("Genre", dom_genre, "#60a5fa")
+    if avg_conf is not None:
+        conf_color = "#34d399" if avg_conf >= 90 else "#fbbf24" if avg_conf >= 75 else "#f87171"
+        rows += _row("K-S confidence", f"{avg_conf}% avg", conf_color)
+    if recurring:
+        rows += _row("Recurring clashes", ", ".join(recurring), "#f87171")
+
+    n = len(history)
+    st.markdown(
+        f'<div style="margin-top:1rem;">'
+        f'<div style="font-size:0.75rem;font-weight:700;color:#a78bfa;'
+        f'letter-spacing:0.06em;text-transform:uppercase;margin-bottom:0.4rem;">'
+        f'📊 Session Profile <span style="color:#475569;font-weight:400;">({n} track{"s" if n != 1 else ""})</span>'
+        f'</div>'
+        f'<div style="background:#0f172a;border:1px solid #1e293b;border-radius:8px;'
+        f'padding:0.5rem 0.75rem;">{rows}</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
 # ── Helpers ─────────────────────────────────────────────────────────────────────
 def score_tier(score):
     if score >= 8:
@@ -1167,6 +1259,8 @@ with st.sidebar:
             st.session_state.chat_messages = []
             st.rerun()
 
+    _render_style_profile(st.session_state.style_history)
+
 
 # ── Main panel ──────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -1248,6 +1342,9 @@ with tab1:
                 "genre_result":    genre_result,
                 "analyzed_at":     datetime.datetime.now(),
             }
+            st.session_state.style_history.append(
+                _style_entry_audio(bpm, key, metrics, selected_genre)
+            )
 
         analysis = st.session_state.analysis
         bpm     = analysis["bpm"]
@@ -1537,6 +1634,9 @@ with tab2:
                 "genre_result":    midi_genre_result,
                 "analyzed_at":     datetime.datetime.now(),
             }
+            st.session_state.style_history.append(
+                _style_entry_midi(midi_data, selected_genre)
+            )
 
         m      = st.session_state.midi_analysis
         md     = m["midi_data"]

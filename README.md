@@ -53,6 +53,12 @@ An AI-powered music theory and beat analysis tool built for FL Studio producers.
 - **Export MIDI** button on every progression — generates a 4-bar chord clip at the detected BPM, ready to drop into FL Studio
 - Auto-populates from your analyzed track, or set the key manually
 
+### Producer Style Tracker
+
+- Accumulates data from every upload within a session (BPM, key, genre, K-S confidence, clash bands)
+- **Session Profile** card appears in the sidebar after 2+ uploads — shows avg BPM + range, dominant key tendency, dominant genre, avg K-S confidence, and recurring frequency clash bands
+- Session-state only for MVP — resets on browser close; Supabase cross-session persistence planned for v2
+
 ### Genre Support
 
 Rap · Hip-Hop · R&B · Old School R&B / Hip-Hop · Pop · Alternative Rock
