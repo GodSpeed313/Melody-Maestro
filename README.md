@@ -61,7 +61,7 @@ An AI-powered music theory and beat analysis tool built for FL Studio producers.
 
 ### Genre Support
 
-Rap · Hip-Hop · R&B · Old School R&B / Hip-Hop · Pop · Alternative Rock
+Rap · Hip-Hop · R&B · Old School R&B / Hip-Hop · Pop · Alternative Rock · Drill · Afrobeats · Neo-Soul · Lo-Fi / Chill Hop · House · Gospel · Reggaeton / Dancehall · Funk · Country / Country Pop · Jazz
 
 ---
 

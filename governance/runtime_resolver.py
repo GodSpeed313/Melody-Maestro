@@ -39,6 +39,16 @@ _GENRE_BPM_RANGES: dict[str, tuple[float, float]] = {
     "Old School R&B / Hip-Hop": (75.0,  105.0),
     "Pop":                      (95.0,  155.0),
     "Alternative Rock":         (95.0,  185.0),
+    "Drill":                    (135.0, 155.0),
+    "Afrobeats":                (95.0,  115.0),
+    "Neo-Soul":                 (58.0,  100.0),
+    "Lo-Fi / Chill Hop":        (68.0,  95.0),
+    "House":                    (118.0, 138.0),
+    "Gospel":                   (60.0,  108.0),
+    "Reggaeton / Dancehall":    (88.0,  102.0),
+    "Funk":                     (88.0,  122.0),
+    "Country / Country Pop":    (78.0,  142.0),
+    "Jazz":                     (55.0,  220.0),
 }
 
 

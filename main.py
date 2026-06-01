@@ -272,6 +272,76 @@ GENRE_CONTEXT = {
         "mix":     "raw wide dynamic mix, natural transients, not over-compressed",
         "forbidden": ["808", "trap", "EDM", "house", "club"],
     },
+    "Drill": {
+        "sonic_refs": ["sliding 808s", "dark piano loops", "hi-hat triplets", "aggressive snares", "ominous strings", "minimalist arrangements"],
+        "drums":   "sparse kick pattern, heavy sliding 808, snappy snare, rapid hi-hat triplets",
+        "texture": "dark minor piano melodies, ominous string stabs, minimal layers, atmospheric pads",
+        "mix":     "heavy sub-bass 808, crisp hi-hats, punchy snare, dark atmospheric low-mid",
+        "forbidden": ["house", "dance floor", "EDM", "bright", "uplifting", "pop crossover", "four-on-the-floor"],
+    },
+    "Afrobeats": {
+        "sonic_refs": ["afro-percussion layers", "offbeat rhythms", "melodic hooks", "talking drum feel", "call-and-response", "warm organic textures"],
+        "drums":   "skip hi-hat pattern, heavy offbeat kick, claps and shakers, talking drum feel, afro-percussion layers",
+        "texture": "melodic synth leads, guitar-influenced melodies, warm pads, vocal chops, layered percussion",
+        "mix":     "warm mid-forward mix, punchy percussion, clear melodic space, balanced dynamics",
+        "forbidden": ["808 slides", "dark ominous", "trap hi-hats", "aggressive street energy"],
+    },
+    "Neo-Soul": {
+        "sonic_refs": ["warm Rhodes", "jazz chord extensions", "live-feel drums", "organic bass", "9th chords", "layered harmonies"],
+        "drums":   "slightly behind the beat, warm snares, brushed hi-hats, shuffle feel, ghost notes",
+        "texture": "warm Rhodes and electric piano, jazz-influenced chord voicings, organic bass, vocal harmonies",
+        "mix":     "warm analog feel, balanced dynamics, vocal-forward, not over-compressed, natural transients",
+        "forbidden": ["trap", "808", "modern pop production", "bright digital synths", "hard-hitting", "EDM"],
+    },
+    "Lo-Fi / Chill Hop": {
+        "sonic_refs": ["vinyl crackle", "dusty drum breaks", "warm Rhodes", "jazz-influenced chords", "ambient texture", "laid-back groove"],
+        "drums":   "slightly off-beat chopped drum breaks, soft kick, snappy rimshot, lo-fi texture, gentle swing",
+        "texture": "warm vintage keys, jazz-influenced chord melodies, ambient pads, vinyl noise and texture",
+        "mix":     "deliberately lo-fi — warm, slightly muffled, natural vinyl character, not bright or crisp",
+        "forbidden": ["trap", "808s", "modern crisp production", "four-on-the-floor", "EDM", "bright high-end", "punchy"],
+    },
+    "House": {
+        "sonic_refs": ["four-on-the-floor kick", "open hi-hats", "piano chord stabs", "sub bass line", "vocal chops", "soulful energy"],
+        "drums":   "four-on-the-floor kick, open hi-hats on offbeats, claps on 2 and 4, driving constant rhythm",
+        "texture": "warm piano chord stabs, synth pads, bass line, soulful vocal elements",
+        "mix":     "clear sub bass, bright punchy kick, wide stereo field, energetic mix",
+        "forbidden": ["trap", "808 slides", "dark ominous", "boom bap", "hip-hop breaks", "lo-fi"],
+    },
+    "Gospel": {
+        "sonic_refs": ["choir harmonies", "Hammond organ", "soulful piano", "powerful snares", "worship energy", "call-and-response"],
+        "drums":   "powerful snares, driving hi-hats, gospel groove, building energy, choir-driven dynamics",
+        "texture": "Hammond organ, piano runs, choir harmonies, strings for swells, rich vocal layers",
+        "mix":     "room-filling, warm powerful low-mids, vocal space for choir, wide and open sound",
+        "forbidden": ["trap 808s", "dark ominous", "minimalist", "hard-hitting street energy", "EDM"],
+    },
+    "Reggaeton / Dancehall": {
+        "sonic_refs": ["dembow rhythm", "Latin percussion", "reggae-influenced bass", "syncopated hi-hats", "Caribbean energy", "dancehall riddim"],
+        "drums":   "dembow pattern (kick on 1 and and-of-2), rimshot, offbeat hi-hats, shakers, Latin percussion layers",
+        "texture": "reggaeton synth lines, tropical melodic hooks, bass-forward arrangement, danceable energy",
+        "mix":     "punchy kick and bass, warm mid-range, danceable dynamics, clear percussion",
+        "forbidden": ["trap 808 slides", "boom bap", "dark ominous", "heavy distortion", "four-on-the-floor"],
+    },
+    "Funk": {
+        "sonic_refs": ["slap bass", "syncopated guitar chords", "tight drum groove", "brass stabs", "wah-wah", "the one"],
+        "drums":   "tight kick on the one, syncopated snare, hi-hat chops, ghost notes, pocket groove",
+        "texture": "slap bass, clipped rhythm guitar, brass stabs, organ fills, syncopated layers",
+        "mix":     "punchy low-mids, clear bass presence, crisp mid-range, breathing dynamics, not over-compressed",
+        "forbidden": ["trap", "808 subs", "dark ominous", "EDM", "modern pop", "lo-fi"],
+    },
+    "Country / Country Pop": {
+        "sonic_refs": ["acoustic guitar", "steel guitar or fiddle", "twang", "Nashville sound", "storytelling energy", "country-trap crossover"],
+        "drums":   "live-feel kick and snare, shuffle hi-hat, driving rhythm, natural acoustic feel",
+        "texture": "acoustic guitar rhythm, steel guitar or fiddle lines, piano, layered vocals, organic feel",
+        "mix":     "warm natural sound, guitar-forward, vocal clarity, open dynamics, Nashville polish",
+        "forbidden": ["808 trap", "dark ominous", "EDM", "house", "heavy distortion"],
+    },
+    "Jazz": {
+        "sonic_refs": ["extended chord voicings", "swing feel", "walking bass", "dynamic range", "9ths and 11ths", "improvisation space"],
+        "drums":   "swing hi-hat pattern, ride cymbal, brushes or sticks, ghost notes, natural dynamics",
+        "texture": "piano voicings with extensions, walking bass, horns or vibraphone, space in the arrangement",
+        "mix":     "natural acoustic space, balanced open dynamics, not over-compressed, wide dynamic range",
+        "forbidden": ["808s", "trap", "EDM", "four-on-the-floor", "heavy compression", "modern pop production"],
+    },
 }
 
 
@@ -388,6 +458,102 @@ THEORY_PROGRESSIONS = {
         "Major": [
             {"name": "Rock Anthem",  "degrees": [0, 4, 5, 3], "feel": "Stadium, powerful"},
             {"name": "Alt Bounce",   "degrees": [0, 1, 3, 4], "feel": "Energetic, melodic"},
+        ],
+    },
+    "Drill": {
+        "Minor": [
+            {"name": "Dark Loop",    "degrees": [0, 5, 3, 5], "feel": "Ominous circular trap loop"},
+            {"name": "UK Drill",     "degrees": [0, 6, 5, 3], "feel": "Descending dark energy"},
+            {"name": "Chicago Drill","degrees": [0, 5, 6, 3], "feel": "Dark with a tense lift"},
+        ],
+    },
+    "Afrobeats": {
+        "Major": [
+            {"name": "Afro Groove",  "degrees": [0, 4, 5, 3], "feel": "Uplifting dance energy"},
+            {"name": "Naija Feel",   "degrees": [0, 2, 4, 5], "feel": "Melodic West African lift"},
+        ],
+        "Minor": [
+            {"name": "Afro Minor",   "degrees": [0, 5, 3, 6], "feel": "Warm melancholic groove"},
+            {"name": "Afropop",      "degrees": [0, 3, 5, 4], "feel": "Danceable minor energy"},
+        ],
+    },
+    "Neo-Soul": {
+        "Minor": [
+            {"name": "The Groove",   "degrees": [0, 3, 2, 5], "feel": "Deep soulful pocket"},
+            {"name": "Jazz Soul",    "degrees": [1, 4, 0, 5], "feel": "Jazz-influenced resolution"},
+        ],
+        "Major": [
+            {"name": "Warmth",       "degrees": [0, 2, 5, 4], "feel": "Organic uplift"},
+            {"name": "Soulful",      "degrees": [0, 5, 3, 4], "feel": "Smooth flowing motion"},
+        ],
+    },
+    "Lo-Fi / Chill Hop": {
+        "Minor": [
+            {"name": "Late Night",   "degrees": [0, 5, 3, 6], "feel": "Rainy night loop"},
+            {"name": "Rainy Day",    "degrees": [0, 3, 2, 5], "feel": "Melancholic cozy drift"},
+        ],
+        "Major": [
+            {"name": "Sunny Loop",   "degrees": [0, 4, 5, 3], "feel": "Warm afternoon groove"},
+            {"name": "Dusty",        "degrees": [0, 5, 3, 4], "feel": "Vintage mellow ease"},
+        ],
+    },
+    "House": {
+        "Minor": [
+            {"name": "Deep House",   "degrees": [0, 5, 3, 6], "feel": "Underground groove loop"},
+            {"name": "Soulful House","degrees": [0, 3, 5, 4], "feel": "Emotional dance floor lift"},
+        ],
+        "Major": [
+            {"name": "Classic House","degrees": [0, 4, 5, 3], "feel": "Euphoric dance floor anthem"},
+            {"name": "Chicago House","degrees": [0, 5, 4, 3], "feel": "Driving soulful energy"},
+        ],
+    },
+    "Gospel": {
+        "Major": [
+            {"name": "Sunday Service","degrees": [0, 4, 5, 4], "feel": "Praise and worship lift"},
+            {"name": "Praise Break", "degrees": [0, 3, 4, 5], "feel": "Building congregation energy"},
+        ],
+        "Minor": [
+            {"name": "Worship",      "degrees": [0, 5, 6, 3], "feel": "Intimate altar presence"},
+            {"name": "Altar Call",   "degrees": [0, 3, 5, 4], "feel": "Deep spiritual resolve"},
+        ],
+    },
+    "Reggaeton / Dancehall": {
+        "Minor": [
+            {"name": "Dembow",       "degrees": [0, 5, 6, 3], "feel": "Classic Latin street energy"},
+            {"name": "Dancehall",    "degrees": [0, 3, 5, 4], "feel": "Caribbean riddim bounce"},
+        ],
+        "Major": [
+            {"name": "Party Mode",   "degrees": [0, 4, 5, 3], "feel": "Tropical dance floor heat"},
+        ],
+    },
+    "Funk": {
+        "Major": [
+            {"name": "The One",      "degrees": [0, 1, 4, 3], "feel": "Syncopated pocket groove"},
+            {"name": "Groove Machine","degrees": [0, 3, 4, 0], "feel": "Driving circular funk"},
+        ],
+        "Minor": [
+            {"name": "Dark Funk",    "degrees": [0, 3, 4, 5], "feel": "Gritty bass-heavy energy"},
+            {"name": "Slap Bass",    "degrees": [0, 5, 3, 4], "feel": "Smooth low-end driven"},
+        ],
+    },
+    "Country / Country Pop": {
+        "Major": [
+            {"name": "Three Chord",  "degrees": [0, 3, 4, 3], "feel": "Classic country simplicity"},
+            {"name": "Nashville",    "degrees": [0, 4, 5, 4], "feel": "Polished country anthem"},
+            {"name": "Country Pop",  "degrees": [0, 5, 3, 4], "feel": "Crossover radio-ready"},
+        ],
+        "Minor": [
+            {"name": "Dark Country", "degrees": [0, 5, 6, 3], "feel": "Country-trap moody tone"},
+        ],
+    },
+    "Jazz": {
+        "Major": [
+            {"name": "ii-V-I",       "degrees": [1, 4, 0, 5], "feel": "Classic jazz resolution"},
+            {"name": "Turnaround",   "degrees": [0, 4, 5, 3], "feel": "Smooth harmonic motion"},
+        ],
+        "Minor": [
+            {"name": "Minor Blues",  "degrees": [0, 3, 4, 5], "feel": "Brooding jazz feel"},
+            {"name": "Modal",        "degrees": [0, 2, 5, 4], "feel": "Open spacious introspection"},
         ],
     },
 }
@@ -1210,7 +1376,11 @@ def _save_buttons(text: str, filename: str, key_prefix: str = "") -> None:
 with st.sidebar:
     selected_genre = st.selectbox(
         "🎵 Genre",
-        ["Rap", "Hip-Hop", "R&B", "Old School R&B / Hip-Hop", "Pop", "Alternative Rock"],
+        [
+            "Rap", "Hip-Hop", "R&B", "Old School R&B / Hip-Hop", "Pop", "Alternative Rock",
+            "Drill", "Afrobeats", "Neo-Soul", "Lo-Fi / Chill Hop", "House", "Gospel",
+            "Reggaeton / Dancehall", "Funk", "Country / Country Pop", "Jazz",
+        ],
         index=0,
         key="genre"
     )
