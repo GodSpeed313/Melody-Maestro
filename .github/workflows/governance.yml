@@ -17,6 +17,68 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
+      # Runs BEFORE checkout so it still fires when an expired PAT would make
+      # checkout fail. Reads the real expiry from GitHub's response header, so
+      # there is no hardcoded date to keep in sync with the PAT.
+      - name: Check PISCRIPTGOVERNANCE PAT expiry
+        id: patcheck
+        run: |
+          set -uo pipefail
+
+          post_discord() {
+            if [ -n "${DISCORD_WEBHOOK_URL:-}" ]; then
+              jq -n --arg c "$1" '{content: $c}' \
+                | curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL" >/dev/null || true
+            fi
+            echo "$1"
+          }
+
+          headers="$(curl -sS -m 30 -D - -o /dev/null \
+            -H "Authorization: Bearer ${GH_PAT}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPO}" || true)"
+
+          status="$(printf '%s' "$headers" | grep -iE '^HTTP/' | tail -n1 | awk '{print $2}')"
+
+          if [ -z "$status" ]; then
+            post_discord "⚠️ Governance Watcher: could not reach the GitHub API to check the PISCRIPTGOVERNANCE PAT (network error). Not failing the run; will retry next cycle."
+            exit 0
+          fi
+
+          if [ "$status" = "401" ] || [ "$status" = "403" ]; then
+            echo "pat_alerted=true" >> "$GITHUB_OUTPUT"
+            post_discord "🔴 CRITICAL: the Governance Watcher PAT (PISCRIPTGOVERNANCE) is EXPIRED or REVOKED (HTTP ${status}). The watcher is DOWN and this channel will stay silent until it is renewed. Fix: regenerate a fine-grained PAT with Contents read/write on GodSpeed313/Melody-Maestro and Contents read on GodSpeed313/Continuum, then update the PISCRIPTGOVERNANCE repo secret. Steps: governance/PAT_RENEWAL.md"
+            exit 1
+          fi
+
+          exp="$(printf '%s' "$headers" | tr -d '\r' \
+            | grep -i '^github-authentication-token-expiration:' \
+            | sed -E 's/^[^:]+:[[:space:]]*//' | head -n1)"
+
+          if [ -z "$exp" ]; then
+            post_discord "⚠️ Governance Watcher: PISCRIPTGOVERNANCE authenticated (HTTP ${status}) but returned no expiration header. The token may be non-expiring (good), or the header format changed — verify manually once."
+            exit 0
+          fi
+
+          exp_epoch="$(date -u -d "$exp" +%s 2>/dev/null || echo 0)"
+          now_epoch="$(date -u +%s)"
+
+          if [ "$exp_epoch" = "0" ]; then
+            post_discord "⚠️ Governance Watcher: could not parse the PISCRIPTGOVERNANCE expiration value '${exp}'. Verify the PAT expiry manually. governance/PAT_RENEWAL.md"
+            exit 0
+          fi
+
+          days_left=$(( (exp_epoch - now_epoch) / 86400 ))
+
+          if [ "$days_left" -le 3 ]; then
+            post_discord "🔴 URGENT: the Governance Watcher PAT (PISCRIPTGOVERNANCE) expires in ${days_left} day(s), on ${exp}. Regenerate it now or the watcher goes silent. governance/PAT_RENEWAL.md"
+          elif [ "$days_left" -le 14 ]; then
+            post_discord "⚠️ Heads up: the Governance Watcher PAT (PISCRIPTGOVERNANCE) expires in ${days_left} days, on ${exp}. Plan to regenerate it. governance/PAT_RENEWAL.md"
+          else
+            echo "PAT healthy: ${days_left} days remaining (expires ${exp})."
+          fi
+
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.PISCRIPTGOVERNANCE }}
@@ -58,3 +120,16 @@ jobs:
           path: |
             governance_log.csv
             governance/traces/
+
+      # Net for the original failure mode: any run failure (that the PAT check
+      # did not already report) is announced, so the channel never just goes
+      # quiet the way it did during the June 2026 PAT outage.
+      - name: Notify Discord if the run failed
+        if: failure() && steps.patcheck.outputs.pat_alerted != 'true'
+        run: |
+          set -uo pipefail
+          if [ -n "${DISCORD_WEBHOOK_URL:-}" ]; then
+            msg="🔴 Governance Watcher run FAILED (${GITHUB_REPO}). Not the known PAT-expiry case, so it needs a look — otherwise this channel just goes quiet. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            jq -n --arg c "$msg" '{content: $c}' \
+              | curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL" >/dev/null || true
+          fi
