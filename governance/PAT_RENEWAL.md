@@ -33,10 +33,12 @@ updated when you rotate the token.
 2. **Resource owner:** `GodSpeed313`.
 3. **Repository access:** only these two repos — `GodSpeed313/Melody-Maestro` and
    `GodSpeed313/Continuum`.
-4. **Repository permissions:**
-   - `Melody-Maestro`: **Contents → Read and write** (needed to push trace commits).
-   - `Continuum`: **Contents → Read-only** (checkout only).
-   - (Metadata read-only is added automatically.)
+4. **Repository permissions: Contents → Read and write.**
+   - A fine-grained token applies ONE permission set to every selected repo — you cannot give
+     Melody-Maestro write and Continuum read-only in a single token. Since the workflow must push
+     trace commits to Melody-Maestro, set **Contents → Read and write**; it covers both repos.
+     Continuum only needs read, so its write grant is unused (harmless) collateral.
+   - Leave every other permission at "No access". (Metadata read-only is added automatically.)
 5. **Expiration:** pick the lifetime you want. A longer expiry means fewer rotations; a shorter one
    is safer. Either way the ⚠️/🔴 warnings above give ~2 weeks of lead time before it lapses.
 6. Copy the new token (`github_pat_…`).
